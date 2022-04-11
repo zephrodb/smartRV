@@ -1,7 +1,7 @@
 #!/usr/bin/python3
-# /etc/init.d/temp.py
+# /etc/init.d/smartRV.py
 ### BEGIN INIT INFO
-# Provides:          RV-temp
+# Provides:          smartRV
 # Required-Start:    $remote_fs $syslog
 # Required-Stop:     $remote_fs $syslog
 # Default-Start:     2 3 4 5
@@ -9,6 +9,7 @@
 # Short-Description: Start daemon at boot time
 # Description:       Enable service provided by daemon.
 ### END INIT INF
+
 from cgitb import text
 from gpiozero import CPUTemperature
 import time
@@ -20,6 +21,7 @@ import RPi.GPIO as GPIO
 import datetime
 import sys
 import pyttsx3
+
 date = datetime.datetime.now()
 original_stdout = sys.stdout # Save a reference to the original standard output
 dhtDevice = adafruit_dht.DHT11(board.D4)
@@ -33,25 +35,26 @@ callSign = "W R F R 8 8 6"
 tld="com.au"
 gennyRunning = 0
 snooze = 10
+enableDTMF = 1
+
 RELAY_PTT_GPIO = 17
 RELAY_GENSTART_GPIO = 27
 GPIO.setmode(GPIO.BCM) # GPIO Numbers instead of board numbers
-GPIO.setup(26, GPIO.OUT)
 GPIO.setup(RELAY_PTT_GPIO, GPIO.OUT) # GPIO Assign mode
 GPIO.setup(RELAY_GENSTART_GPIO, GPIO.OUT) # GPIO Assign mode
 engine = pyttsx3.init()
 
 def listenForDTMF() :
-    it = "rtl_fm -M wbfm -f 146520000 -s 22050 | timeout {} multimon-ng -t raw -a FMSFSK -a AFSK1200 -a DTMF /dev/stdin > DTMF.txt &"
-    os.system(it)
-    print("listening")
+    if enableDTMF == 1 :
+        it = "rtl_fm -M wbfm -f 146520000 -s 22050 | timeout {} multimon-ng -t raw -a FMSFSK -a AFSK1200 -a DTMF /dev/stdin > DTMF.txt &"
+        os.system(it)
+        print("listening")
 
 def allRelaysHIGH() :
-    print("All Relays going HIGH(off)")
-    GPIO.output(RELAY_PTT_GPIO, GPIO.HIGH) # out
-    GPIO.output(RELAY_GENSTART_GPIO, GPIO.HIGH) # out
-    exit
-
+        print("All Relays going HIGH(off)")
+        GPIO.output(RELAY_PTT_GPIO, GPIO.HIGH) # out
+        GPIO.output(RELAY_GENSTART_GPIO, GPIO.HIGH) # out
+        
 def gennyStatus() :
     if GPIO.input(26):
         print("Generator is ON")
@@ -126,12 +129,13 @@ def startGenny() :
         do_start
 
 def do_start() :
-	allRelaysHIGH()
-	schedule.every(2).minutes.do(readTemp)
-	schedule.every(550).seconds.do(callsign)
-	#listenForDTMF()
-	#allRelaysHIGH()
-	readTemp()
+        listenForDTMF()
+        allRelaysHIGH()
+        schedule.every(2).minutes.do(readTemp)
+        schedule.every(550).seconds.do(callsign)
+        #listenForDTMF()
+        #allRelaysHIGH()
+        readTemp()
 
 
 def readTemp() :
