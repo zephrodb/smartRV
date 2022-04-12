@@ -10,6 +10,7 @@
 # Description:       Enable service provided by daemon.
 ### END INIT INF
 from cgitb import text
+from lib2to3.pgen2.token import DOUBLESTAR
 from gpiozero import CPUTemperature
 import time
 import os
@@ -31,7 +32,7 @@ medTemp = 83
 autoPowerOn = 85 
 callSign = "W R F R 8 8 6"
 tld="com.au"
-gennyRunning = 0
+generacNotRunning = 1
 snooze = 10
 generacStart = "##436**1"
 generacStop = "##436**0"
@@ -44,13 +45,20 @@ GPIO.setup(RELAY_PTT_GPIO, GPIO.OUT) # GPIO Assign mode
 GPIO.setup(RELAY_GENSTART_GPIO, GPIO.OUT) # GPIO Assign mode
 engine = pyttsx3.init()
 
+
+
 def readDTFM() :
-    dtfmFile = open("/home/pi/monitor/DTFM.log")
-    data = dtfmFile
+    print("Reading DTFM")
+    with open('/home/pi/monitor/DTFM.log', 'r') as file:
+        data = file.read()
+    print(data)
     if generacStart in data :
+        print("Start CMD Received")
         startGenerac()
     elif generacStop in data :
+        print("Stop CMD Received")
         stopGenerac()
+    os.system("echo > /home/pi/monitor/DTFM.log")
         
 def stopGenerac() :
     print("stop generac")
@@ -81,15 +89,15 @@ def callsign() :
 def generacStatus() :
     if GPIO.input(26):
         print("Generator is ON")
-        generacRunning = "1"
+        generacNotRunning = "0"
     else:
         print("Generator is OFF")
-        generacRunning = "0"
+        generacNotRunning = "1"
 
 def startGenerac() :
     generacStatus()
     try:
-        if generacRunning == 0 :
+        if generacNotRunning == 1 :
             print("Starting Genny")
             GPIO.output(RELAY_GENSTART_GPIO ,GPIO.LOW) # on
             print("Cranking 1 seconds")
@@ -102,7 +110,7 @@ def startGenerac() :
             GPIO.output(RELAY_PTT_GPIO, GPIO.HIGH) # out
             time.sleep(32)
             generacStatus()
-            if generacRunning == 0 :
+            if generacNotRunning == 1 :
                 text = "good ole genny failed to start fall back is one minute and another attempt is made"
                 print(text)
                 GPIO.output(RELAY_PTT_GPIO, GPIO.LOW) # on
@@ -115,7 +123,7 @@ def startGenerac() :
                 log = "{}, {}".format(date, text)
                 xmitLog = "echo {} >> /home/pi/monitor/xmit.log".format(log)
                 os.system(xmitLog)
-            elif generacRunning == 1 :
+            elif generacNotRunning == 0 :
                 text = "genny has started monitoring will remain at one minute intervals untill temp is normal"
                 print(text)
                 GPIO.output(RELAY_PTT_GPIO, GPIO.LOW) # on
@@ -129,8 +137,22 @@ def startGenerac() :
                 log = "{}, {}".format(date, text)
                 xmitLog = "echo {} >> /home/pi/monitor/xmit.log".format(log)
                 os.system(xmitLog)
+        elif generacNotRunning == 0 :
+            text = "The Generac is already running, you twit."
+            print(text)
+            GPIO.output(RELAY_PTT_GPIO, GPIO.LOW) # on
+            time.sleep(.5)
+            date = datetime.datetime.now()
+            speak = 'espeak -s 125 "{}" > /dev/null 2>&1'.format(text)
+            os.system(speak)   
+            os.system("mpg123 -q -o alsa:hw:1,0 text.mp3")
+            time.sleep(.5)      
+            GPIO.output(RELAY_PTT_GPIO, GPIO.HIGH) # out
+            log = "{}, {}".format(date, text)
+            xmitLog = "echo {} >> /home/pi/monitor/xmit.log".format(log)
+            os.system(xmitLog)    
     except:
-        allRelaysHIGH
+        GPIO.output(RELAY_GENSTART_GPIO, GPIO.HIGH)
         #do_start
 
 
@@ -146,7 +168,7 @@ def readTemp() :
             humidity = dhtDevice.humidity
             generacStatus()
             if temperature_f < medTemp :
-                if generacRunning == 0 :
+                if generacNotRunning == 1 :
                     text = "Hello, This is an automated reporting system, current conditions inside rosebud explorer the temperature is {}. humidity is {} percent, this is {}".format(temperature_f, humidity, callSign)
                 else:
                     text = "Hello, This is an automated reporting system, current conditions inside rosebud explorer the temperature is {}. humidity is {} percent. The generator is running This is {}".format(temperature_f, humidity, callSign)
@@ -164,7 +186,7 @@ def readTemp() :
                 os.system(xmitLog)
                 break
             elif temperature_f < highTemp and temperature_f > medTemp :
-                if generacRunning == 0 :
+                if generacNotRunning == 1 :
                     text = "Hello, This is an automated reporting system, current conditions inside rosebud explorer the temperature is {}. humidity is {} percent. this is getting warm! Fortunatlety the generator is running This is {}".format(temperature_f, humidity, callSign)
                 else :
                     text = "Hello, This is an automated reporting system, current conditions inside rosebud explorer the temperature is {}. humidity is {} percent. this is getting warm! warning, generator is off This is {}".format(temperature_f, humidity, callSign)
@@ -179,9 +201,9 @@ def readTemp() :
                 log = "{}, {}".format(date, text)
                 xmitLog = "echo {} >> /home/pi/monitor/xmit.log".format(log)
                 os.system(xmitLog)
-            elif temperature_f > highTemp and generacRunning == 0 :
+            elif temperature_f > highTemp and generacNotRunning == 1 :
                 text = "Hello, This is an automated reporting system, the conditions inside rosebud explorer the temperature is {} humidity is percent {} the generator is starting fallback is 30 seconds".format(temperature_f, humidity)
-                print(text1)               
+                print(text)               
                 GPIO.output(RELAY_PTT_GPIO, GPIO.LOW) # on
                 time.sleep(.5)                
                 speak = 'espeak -s 125 "{}" > /dev/null 2>&1'.format(text)
@@ -200,9 +222,9 @@ def readTemp() :
                 xmitLog = "echo {} >> /home/pi/monitor/xmit.log".format(log)
                 os.system(xmitLog)
                 startGenerac()
-            elif temperature_f > highTemp and generacRunning == 1 :
+            elif temperature_f > highTemp and generacNotRunning == 0 :
                 text = "Hello, This is an automated reporting system, the conditions inside rosebud explorer the temperature is {} humidity is percent {} the generator is running. reporting is set to one minute This is {}".format(temperature_f, humidity, callSign)
-                print(text1)
+                print(text)
                 GPIO.output(RELAY_PTT_GPIO, GPIO.LOW) # on
                 time.sleep(.5)                
                 speak = 'espeak -s 125 "{}" > /dev/null 2>&1'.format(text)
@@ -228,10 +250,14 @@ def readTemp() :
         except:    
             allRelaysHIGH()
             readTemp()
+def doStart():
+    readTemp()
+    schedule.every(300).seconds.do(readTemp)
+    schedule.every(20).seconds.do(readDTFM)
+    schedule.every(550).seconds.do(callsign)
 
-readTemp()
-schedule.every(30).seconds.do(readTemp)
-schedule.every(550).seconds.do(callsign)
+doStart()
+
 while 1:
     schedule.run_pending()
     time.sleep(1)
