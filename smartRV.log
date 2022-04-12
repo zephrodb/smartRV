@@ -1,0 +1,35 @@
+2022-04-12 12:25:18,585 DEBUG Debug message
+2022-04-12 12:25:18,585 INFO Informative message
+2022-04-12 12:25:18,585 ERROR Error message
+2022-04-12 12:25:38,439 DEBUG Debug message
+2022-04-12 12:25:38,439 INFO Informative message
+2022-04-12 12:25:38,439 ERROR Error message
+2022-04-12 12:25:38,840 DEBUG Debug message
+2022-04-12 12:25:38,840 INFO Informative message
+2022-04-12 12:25:38,840 ERROR Error message
+2022-04-12 12:25:39,118 DEBUG Debug message
+2022-04-12 12:25:39,118 INFO Informative message
+2022-04-12 12:25:39,118 ERROR Error message
+2022-04-12 12:25:39,430 DEBUG Debug message
+2022-04-12 12:25:39,430 INFO Informative message
+2022-04-12 12:25:39,430 ERROR Error message
+2022-04-12 12:27:05,669 INFO Starting SmartRV...
+2022-04-12 12:34:05,864 INFO Starting SmartRV...
+2022-04-12 12:35:03,976 INFO Starting SmartRV...
+2022-04-12 12:35:20,807 INFO Starting SmartRV...
+2022-04-12 12:35:20,812 INFO starting Generator 60A BEAST
+2022-04-12 12:35:44,739 INFO Starting SmartRV...
+2022-04-12 12:35:44,745 INFO starting Generator 60A BEAST
+2022-04-12 12:38:02,009 INFO Starting SmartRV...
+2022-04-12 12:38:02,026 INFO starting generator60A BEAST
+2022-04-12 12:38:02,026 INFO generator not started60A BEAST
+2022-04-12 12:42:41,364 INFO Starting SmartRV...
+2022-04-12 12:43:43,413 INFO Starting SmartRV...
+2022-04-12 12:43:43,424 INFO starting generator60A BEAST
+2022-04-12 12:43:43,425 INFO generator not started60A BEAST
+2022-04-12 12:45:45,191 INFO Starting SmartRV...
+2022-04-12 12:45:45,191 INFO starting generator60A BEAST
+2022-04-12 12:45:45,200 INFO generator not started60A BEAST
+2022-04-12 12:46:29,371 INFO Starting SmartRV...
+2022-04-12 12:46:29,379 INFO starting generator 60A BEAST
+2022-04-12 12:46:29,379 INFO generator not started 60A BEAST

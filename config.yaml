@@ -1,0 +1,11 @@
+highHumidity: 35
+highTemp: 83
+medHumidity: 35
+medTemp: 83
+autoPowerOn: 85 
+callSign: "W R F R 8 8 6"
+gennyRunning: 0
+snooze: 10
+enableDTMF: true
+bigGennyName: "60A BEAST"
+extraGennyName: "wen"
