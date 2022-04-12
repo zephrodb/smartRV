@@ -1,7 +1,7 @@
 #!/usr/bin/python3
-# /etc/init.d/smartRV.py
+# /etc/init.d/temp.py
 ### BEGIN INIT INFO
-# Provides:          smartRV
+# Provides:          RV-temp
 # Required-Start:    $remote_fs $syslog
 # Required-Stop:     $remote_fs $syslog
 # Default-Start:     2 3 4 5
@@ -9,7 +9,6 @@
 # Short-Description: Start daemon at boot time
 # Description:       Enable service provided by daemon.
 ### END INIT INF
-
 from cgitb import text
 from gpiozero import CPUTemperature
 import time
@@ -21,7 +20,6 @@ import RPi.GPIO as GPIO
 import datetime
 import sys
 import pyttsx3
-
 date = datetime.datetime.now()
 original_stdout = sys.stdout # Save a reference to the original standard output
 dhtDevice = adafruit_dht.DHT11(board.D4)
@@ -35,33 +33,33 @@ callSign = "W R F R 8 8 6"
 tld="com.au"
 gennyRunning = 0
 snooze = 10
-enableDTMF = 1
-
+generacStart = "##436**1"
+generacStop = "##436**0"
+wenStop = "##936**0"
 RELAY_PTT_GPIO = 17
 RELAY_GENSTART_GPIO = 27
 GPIO.setmode(GPIO.BCM) # GPIO Numbers instead of board numbers
+GPIO.setup(26, GPIO.IN)
 GPIO.setup(RELAY_PTT_GPIO, GPIO.OUT) # GPIO Assign mode
 GPIO.setup(RELAY_GENSTART_GPIO, GPIO.OUT) # GPIO Assign mode
 engine = pyttsx3.init()
 
-def listenForDTMF() :
-    if enableDTMF == 1 :
-        it = "rtl_fm -M wbfm -f 146520000 -s 22050 | timeout {} multimon-ng -t raw -a FMSFSK -a AFSK1200 -a DTMF /dev/stdin > DTMF.txt &"
-        os.system(it)
-        print("listening")
+def readDTFM() :
+    dtfmFile = open("/home/pi/monitor/DTFM.log")
+    data = dtfmFile
+    if generacStart in data :
+        startGenerac()
+    elif generacStop in data :
+        stopGenerac()
+        
+def stopGenerac() :
+    print("stop generac")
 
 def allRelaysHIGH() :
-        print("All Relays going HIGH(off)")
-        GPIO.output(RELAY_PTT_GPIO, GPIO.HIGH) # out
-        GPIO.output(RELAY_GENSTART_GPIO, GPIO.HIGH) # out
-        
-def gennyStatus() :
-    if GPIO.input(26):
-        print("Generator is ON")
-        gennyRunning = 1
-    else:
-        print("Generator is OFF")
-        gennyRunning = 0
+    print("All Relays going HIGH(off)")
+    GPIO.output(RELAY_PTT_GPIO, GPIO.HIGH) # out
+    GPIO.output(RELAY_GENSTART_GPIO, GPIO.HIGH) # out
+
 
 def callsign() :
     try:
@@ -79,12 +77,19 @@ def callsign() :
         os.system(xmitLog)
     except:
         allRelaysHIGH
-        do_start 
 
-def startGenny() :
-    gennyStatus()
+def generacStatus() :
+    if GPIO.input(26):
+        print("Generator is ON")
+        generacRunning = "1"
+    else:
+        print("Generator is OFF")
+        generacRunning = "0"
+
+def startGenerac() :
+    generacStatus()
     try:
-        if gennyRunning == 0 :
+        if generacRunning == 0 :
             print("Starting Genny")
             GPIO.output(RELAY_GENSTART_GPIO ,GPIO.LOW) # on
             print("Cranking 1 seconds")
@@ -96,8 +101,8 @@ def startGenny() :
             time.sleep(.5)
             GPIO.output(RELAY_PTT_GPIO, GPIO.HIGH) # out
             time.sleep(32)
-            gennyStatus()
-            if gennyRunning == 0 :
+            generacStatus()
+            if generacRunning == 0 :
                 text = "good ole genny failed to start fall back is one minute and another attempt is made"
                 print(text)
                 GPIO.output(RELAY_PTT_GPIO, GPIO.LOW) # on
@@ -110,7 +115,7 @@ def startGenny() :
                 log = "{}, {}".format(date, text)
                 xmitLog = "echo {} >> /home/pi/monitor/xmit.log".format(log)
                 os.system(xmitLog)
-            elif gennyRunning == 1 :
+            elif generacRunning == 1 :
                 text = "genny has started monitoring will remain at one minute intervals untill temp is normal"
                 print(text)
                 GPIO.output(RELAY_PTT_GPIO, GPIO.LOW) # on
@@ -126,20 +131,12 @@ def startGenny() :
                 os.system(xmitLog)
     except:
         allRelaysHIGH
-        do_start
+        #do_start
 
-def do_start() :
-        listenForDTMF()
-        allRelaysHIGH()
-        schedule.every(2).minutes.do(readTemp)
-        schedule.every(550).seconds.do(callsign)
-        #listenForDTMF()
-        #allRelaysHIGH()
-        readTemp()
 
 
 def readTemp() :
-    allRelaysHIGH()
+    #allRelaysHIGH()
     while 1:
         try:
             temperature_c = dhtDevice.temperature
@@ -147,9 +144,9 @@ def readTemp() :
             temperature_f = temperature_c * (9 / 5) + 32
             temperature_f = int(temperature_f)
             humidity = dhtDevice.humidity
-            gennyStatus()
+            generacStatus()
             if temperature_f < medTemp :
-                if gennyRunning == 0 :
+                if generacRunning == 0 :
                     text = "Hello, This is an automated reporting system, current conditions inside rosebud explorer the temperature is {}. humidity is {} percent, this is {}".format(temperature_f, humidity, callSign)
                 else:
                     text = "Hello, This is an automated reporting system, current conditions inside rosebud explorer the temperature is {}. humidity is {} percent. The generator is running This is {}".format(temperature_f, humidity, callSign)
@@ -167,7 +164,7 @@ def readTemp() :
                 os.system(xmitLog)
                 break
             elif temperature_f < highTemp and temperature_f > medTemp :
-                if gennyRunning == 0 :
+                if generacRunning == 0 :
                     text = "Hello, This is an automated reporting system, current conditions inside rosebud explorer the temperature is {}. humidity is {} percent. this is getting warm! Fortunatlety the generator is running This is {}".format(temperature_f, humidity, callSign)
                 else :
                     text = "Hello, This is an automated reporting system, current conditions inside rosebud explorer the temperature is {}. humidity is {} percent. this is getting warm! warning, generator is off This is {}".format(temperature_f, humidity, callSign)
@@ -182,7 +179,7 @@ def readTemp() :
                 log = "{}, {}".format(date, text)
                 xmitLog = "echo {} >> /home/pi/monitor/xmit.log".format(log)
                 os.system(xmitLog)
-            elif temperature_f > highTemp and gennyRunning == 0 :
+            elif temperature_f > highTemp and generacRunning == 0 :
                 text = "Hello, This is an automated reporting system, the conditions inside rosebud explorer the temperature is {} humidity is percent {} the generator is starting fallback is 30 seconds".format(temperature_f, humidity)
                 print(text1)               
                 GPIO.output(RELAY_PTT_GPIO, GPIO.LOW) # on
@@ -202,8 +199,8 @@ def readTemp() :
                 log = "{}, {}".format(date, text)
                 xmitLog = "echo {} >> /home/pi/monitor/xmit.log".format(log)
                 os.system(xmitLog)
-                startGenny()
-            elif temperature_f > highTemp and gennyRunning == 1 :
+                startGenerac()
+            elif temperature_f > highTemp and generacRunning == 1 :
                 text = "Hello, This is an automated reporting system, the conditions inside rosebud explorer the temperature is {} humidity is percent {} the generator is running. reporting is set to one minute This is {}".format(temperature_f, humidity, callSign)
                 print(text1)
                 GPIO.output(RELAY_PTT_GPIO, GPIO.LOW) # on
@@ -232,8 +229,9 @@ def readTemp() :
             allRelaysHIGH()
             readTemp()
 
-do_start()
-
+readTemp()
+schedule.every(30).seconds.do(readTemp)
+schedule.every(550).seconds.do(callsign)
 while 1:
     schedule.run_pending()
     time.sleep(1)
