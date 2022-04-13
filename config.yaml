@@ -6,6 +6,17 @@ autoPowerOn: 85
 callSign: "W R F R 8 8 6"
 gennyRunning: 0
 snooze: 10
-enableDTMF: true
+DTMFOperStatus: true
 bigGennyName: "60A BEAST"
 extraGennyName: "wen"
+PTTRelayPin: 21
+BigGenStartRelayPin: 16
+BigGenEnableRelayPin: 12
+LittleGenEnableRelayPin: 20
+ChargerEnableRelayPin: 24
+InverterEnableRelayPin: 25
+Temp1Pin: 4
+Temp2Pin: 17
+BigGenRunSense: 18
+LittleGenRunSense: 23
+LowVSense: 27
