@@ -56,7 +56,7 @@ class powerControl:
         self.fuelLevel = fuelLevel
         self.BigName = BigGennyName
         self.LittleName = LittleGennyName
-        self.BigGenStart = BigGenStartRelayPin
+        self.BigGenStarter = BigGenStartRelayPin
         self.LittleGenEnable = LittleGenEnableRelayPin
         self.InverterEnable = InverterEnableRelayPin
         self.ChargerEnable = ChargerEnableRelayPin
@@ -138,7 +138,7 @@ if __name__ == "__main__":
 
         #the things that are read into the powerControl object are read in order. You can assign them all manually but it's not really necessary
         onBoardGenny = powerControl(configParams['BigGennyName'], 
-                                 configParams['BigGenStart'], 
+                                 configParams['BigGenStarter'], 
                                  configParams['BigGenEnable'])
         babyGenny = powerControl(configParams['LittleGennyName'], 
                               configParams['LittleGenEnable'])
