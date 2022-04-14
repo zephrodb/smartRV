@@ -11,7 +11,33 @@ class environmentThresholds:
         self.highTemp = highTemp
         self.medHumidity = medHumidity
         self.medTemp = medTemp
+class setupPins:
+    def __init__(Temp1Pin, Temp2Pin, BigGenRunSense, LittleGenRunSense, LowVSense, PTTRelayPin, BigGenStartRelayPin, BigGenEnableRelayPin, LittleGenEnableRelayPin, ChargerEnableRelayPin, InverterEnableRelayPin, CT1):
+        GPIO.setmode(GPIO.BCM)
+        GPIO.setup(Temp1Pin, GPIO.IN)
+        GPIO.setup(Temp2Pin, GPIO.IN)
+        GPIO.setup(BigGenRunSense, GPIO.IN)
+        GPIO.setup(LittleGenRunSense, GPIO.IN)
+        GPIO.setup(LowVSense, GPIO.IN)
+        GPIO.setup(CT1, GPIO.IN)
+        GPIO.setup(PTTRelayPin, GPIO.OUT)
+        GPIO.setup(BigGenStartRelayPin, GPIO.OUT)
+        GPIO.setup(BigGenEnableRelayPin, GPIO.OUT)
+        GPIO.setup(LittleGenEnableRelayPin, GPIO.OUT)
+        GPIO.setup(ChargerEnableRelayPin, GPIO.OUT)
+        GPIO.setup(InverterEnableRelayPin, GPIO.OUT)
+        print("Setup Pins")
 
+class allRelaysDeenergize:
+    def __init__(PTTRelayPin, BigGenStartRelayPin, BigGenEnableRelayPin, LittleGenEnableRelayPin, ChargerEnableRelayPin, InverterEnableRelayPin):
+        #pull down all the relays.
+        GPIO.output(PTTRelayPin, GPIO.HIGH)
+        GPIO.output(BigGenStartRelayPin, GPIO.HIGH)
+        GPIO.output(BigGenEnableRelayPin, GPIO.HIGH)
+        GPIO.output(LittleGenEnableRelayPin, GPIO.HIGH)
+        GPIO.output(ChargerEnableRelayPin, GPIO.HIGH)
+        GPIO.output(InverterEnableRelayPin, GPIO.HIGH)
+        print("Relays all down")
 class radio:
     def __init__(self, callSign, DTMFOperStatus, PTTRelayPin):
         self.callSign = callSign
@@ -24,9 +50,9 @@ class radio:
     def disableDTMF(self):
         self.DTMFOperStatus = False     
 
-class generator:
-    def __init__(self, gennyName, BigGenStartRelayPin, BigGenEnableRelayPin, LittleGenEnableRelayPin, InverterEnableRelayPin, ChargerEnableRelayPin, gennyRunning=False, fuelLevel=0,): 
-        self.gennyRunning = gennyRunning
+class powerControl:
+    def __init__(self, gennyName, BigGenStartRelayPin, BigGenEnableRelayPin, LittleGenEnableRelayPin, InverterEnableRelayPin, ChargerEnableRelayPin, BigGenRunning=False, fuelLevel=0,): 
+        self.BigGenRunning = BigGenRunning
         self.fuelLevel = fuelLevel
         self.Name = gennyName
         #Had to change the names here since this is the template
@@ -38,12 +64,16 @@ class generator:
         self.RelayGenEnableGPIO = InverterEnableRelayPin
         self.RelayGenEnableGPIO = ChargerEnableRelayPin
 
-    def checkGennyStatus(self):
+    def checkBigGenStatus(self):
         #TODO need to add logic to actually check status
-        return self.gennyRunning
+        return self.BigGenRunning
 
-    def startGenny(self):
-        if self.checkGennyStatus() == False:
+    def checkBigGenStatus(self):
+        #TODO need to add logic to actually check status
+        return self.BigGenRunning
+
+    def startBigGen(self):
+        if self.checkBigGenStatus() == False:
             msg = "starting generator"
             logging.info(msg + " " + self.Name)
             #TODO need to add logic to actually start genny
@@ -53,8 +83,8 @@ class generator:
             logging.info(msg + " " + self.Name) 
             return msg 
 
-    def stopGenny(self):
-        if self.checkGennyStatus() == True:
+    def stopBigGen(self):
+        if self.checkBigGenStatus() == True:
             msg = "stopping generator"
             logging.info(msg + " " + self.Name) 
             #TODO need to add logic to actually stop genny
@@ -63,6 +93,17 @@ class generator:
             msg = "Unable to stop generator, it is not running"
             logging.info(msg + " " + self.Name) 
             return msg 
+    def stopLittleGen(self):
+        if self.checkLittleGenStatus() == True:
+            msg = "stopping generator"
+            logging.info(msg + " " + self.Name) 
+            #TODO need to add logic to actually stop genny
+            return msg 
+        else:
+            msg = "Unable to stop generator, it is not running"
+            logging.info(msg + " " + self.Name) 
+            return msg 
+
 
 if __name__ == "__main__":
 
@@ -90,16 +131,17 @@ if __name__ == "__main__":
                     configParams['PTTRelayPin']) 
         #assigning dict valuses to an object
 
-        #the things that are read into the generator object are read in order. You can assign them all manually but it's not really necessary
-        onBoardGenny = generator(configParams['bigGennyName'], 
+        #the things that are read into the powerControl object are read in order. You can assign them all manually but it's not really necessary
+        onBoardGenny = powerControl(configParams['bigGennyName'], 
                                  configParams['BigGenStartRelayPin'], 
                                  configParams['BigGenEnableRelayPin'])
-        babyGenny = generator(configParams['extraGennyName'], 
+        babyGenny = powerControl(configParams['extraGennyName'], 
                               configParams['LittleGenEnableRelayPin'])
-        inverter = generator(configParams['InverterEnableRelayPin'])
-        charger = generator(configParams['ChargerEnableRelayPin'])                              
+        inverter = powerControl(configParams['InverterEnableRelayPin'])
+        charger = powerControl(configParams['ChargerEnableRelayPin'])                              
 
-
+    setupPins()
+    allRelaysDeenergize()
     print(env.highHumidity)   
     print(rad.DTMFOperStatus)
     print(rad.callSign)
@@ -108,22 +150,15 @@ if __name__ == "__main__":
     print(msg)
     msg = onBoardGenny.stopGenny()
     print(msg)
-    GPIO.setmode(GPIO.BCM) # GPIO Numbers instead of board numbers
-    # GPIO.setup(RELAY_PTT_GPIO, GPIO.OUT) # GPIO Assign mode
 
-    ### Look here, we're accessing the same property of the two different instances of the generator object
+    ### Look here, we're accessing the same property of the two different instances of the powerControl object
     print("Big Genny relay Start pin "+onBoardGenny.BigGenStartRelayPin)
     print("Big Genny relay enable pin "+onBoardGenny.BigGenEnableRelayPin)
     print("Little Genny relay enable pin "+babyGenny.LittleGenEnableRelayPin)
     print("Little Genny relay enable pin "+inverter.InverterEnableRelayPin)
     print("Little Genny relay enable pin "+charger.ChargerEnableRelayPin)
     
-    GPIO.setup(onBoardGenny.BigGenStartRelayPin, GPIO.OUT) # GPIO Assign mode  
-    GPIO.setup(onBoardGenny.BigGenEnableRelayPin, GPIO.OUT) # GPIO Assign mode
-    GPIO.setup(onBoardGenny.LittleGenEnableRelayPin, GPIO.OUT) # GPIO Assign mode  
-    GPIO.setup(onBoardGenny.ChargerEnableRelayPin, GPIO.OUT) # GPIO Assign mode  
-    GPIO.setup(onBoardGenny.InverterEnableRelayPin, GPIO.OUT) # GPIO Assign mode  
-    GPIO.setup(rad.PTTRelayPin, GPIO.OUT) # GPIO Assign mode  
+
 
 
 

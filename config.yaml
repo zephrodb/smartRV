@@ -20,3 +20,8 @@ Temp2Pin: 17
 BigGenRunSense: 18
 LittleGenRunSense: 23
 LowVSense: 27
+CT1: 22
+shuntBatt1: 40 
+shuntBatt2: 41
+shuntCharger: 42
+shuntSelfDraw: 43
