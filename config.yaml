@@ -7,8 +7,8 @@ callSign: "W R F R 8 8 6"
 gennyRunning: 0
 snooze: 10
 DTMFOperStatus: true
-bigGennyName: "60A BEAST"
-extraGennyName: "wen"
+BigGennyName: "60A BEAST"
+LittleGennyName: "wen"
 PTTRelayPin: 21
 BigGenStartRelayPin: 16
 BigGenEnableRelayPin: 12

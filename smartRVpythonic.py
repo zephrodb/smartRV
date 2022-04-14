@@ -51,10 +51,11 @@ class radio:
         self.DTMFOperStatus = False     
 
 class powerControl:
-    def __init__(self, gennyName, BigGenStartRelayPin, BigGenEnableRelayPin, LittleGenEnableRelayPin, InverterEnableRelayPin, ChargerEnableRelayPin, BigGenRunning=False, fuelLevel=0,): 
+    def __init__(self, BigGennyName, LittleGennyName, BigGenStartRelayPin, BigGenEnableRelayPin, LittleGenEnableRelayPin, InverterEnableRelayPin, ChargerEnableRelayPin, BigGenRunning=False, fuelLevel=0,): 
         self.BigGenRunning = BigGenRunning
         self.fuelLevel = fuelLevel
-        self.Name = gennyName
+        self.BigName = BigGennyName
+        self.LittleName = LittleGennyName
         #Had to change the names here since this is the template
         #the onBoardGen object is the instance of the big gen
         #baby gen is for the little one
@@ -132,10 +133,10 @@ if __name__ == "__main__":
         #assigning dict valuses to an object
 
         #the things that are read into the powerControl object are read in order. You can assign them all manually but it's not really necessary
-        onBoardGenny = powerControl(configParams['bigGennyName'], 
+        onBoardGenny = powerControl(configParams['BigGennyName'], 
                                  configParams['BigGenStartRelayPin'], 
                                  configParams['BigGenEnableRelayPin'])
-        babyGenny = powerControl(configParams['extraGennyName'], 
+        babyGenny = powerControl(configParams['LittleGennyName'], 
                               configParams['LittleGenEnableRelayPin'])
         inverter = powerControl(configParams['InverterEnableRelayPin'])
         charger = powerControl(configParams['ChargerEnableRelayPin'])                              
