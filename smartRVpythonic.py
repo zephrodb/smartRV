@@ -56,6 +56,13 @@ class powerControl:
         self.fuelLevel = fuelLevel
         self.BigName = BigGennyName
         self.LittleName = LittleGennyName
+        self.BigGenStartRelayPin = BigGenStartRelayPin
+        self.LittleGenEnableRelayPin = LittleGenEnableRelayPin
+        self.InverterEnableRelayPin = InverterEnableRelayPin
+        self.ChargerEnableRelayPin = ChargerEnableRelayPin
+
+        
+        
         #Had to change the names here since this is the template
         #the onBoardGen object is the instance of the big gen
         #baby gen is for the little one
