@@ -56,13 +56,10 @@ class powerControl:
         self.fuelLevel = fuelLevel
         self.BigName = BigGennyName
         self.LittleName = LittleGennyName
-        self.BigGenStartRelayPin = BigGenStartRelayPin
-        self.LittleGenEnableRelayPin = LittleGenEnableRelayPin
-        self.InverterEnableRelayPin = InverterEnableRelayPin
-        self.ChargerEnableRelayPin = ChargerEnableRelayPin
-
-        
-        
+        self.BigGenStart = BigGenStartRelayPin
+        self.LittleGenEnable = LittleGenEnableRelayPin
+        self.InverterEnable = InverterEnableRelayPin
+        self.ChargerEnable = ChargerEnableRelayPin
         #Had to change the names here since this is the template
         #the onBoardGen object is the instance of the big gen
         #baby gen is for the little one
@@ -141,12 +138,12 @@ if __name__ == "__main__":
 
         #the things that are read into the powerControl object are read in order. You can assign them all manually but it's not really necessary
         onBoardGenny = powerControl(configParams['BigGennyName'], 
-                                 configParams['BigGenStartRelayPin'], 
-                                 configParams['BigGenEnableRelayPin'])
+                                 configParams['BigGenStart'], 
+                                 configParams['BigGenEnable'])
         babyGenny = powerControl(configParams['LittleGennyName'], 
-                              configParams['LittleGenEnableRelayPin'])
-        inverter = powerControl(configParams['InverterEnableRelayPin'])
-        charger = powerControl(configParams['ChargerEnableRelayPin'])                              
+                              configParams['LittleGenEnable'])
+        inverter = powerControl(configParams['InverterEnable'])
+        charger = powerControl(configParams['ChargerEnable'])                              
 
     setupPins()
     allRelaysDeenergize()
