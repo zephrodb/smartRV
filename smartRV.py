@@ -1,241 +1,205 @@
-#!/usr/bin/python3
-# /etc/init.d/smartRV.py
-### BEGIN INIT INFO
-# Provides:          smartRV
-# Required-Start:    $remote_fs $syslog
-# Required-Stop:     $remote_fs $syslog
-# Default-Start:     2 3 4 5
-# Default-Stop:      0 1 6
-# Short-Description: Start daemon at boot time
-# Description:       Enable service provided by daemon.
-### END INIT INF
-
-from cgitb import text
-from gpiozero import CPUTemperature
-import time
-import os
-import schedule
+#!/usr/bin/python
+from email import message
+import logging
+import yaml
 import adafruit_dht
 import board
 import RPi.GPIO as GPIO
+import time
+import os
+from espeakng import ESpeakNG
 import datetime
-import sys
-import pyttsx3
 
-date = datetime.datetime.now()
-original_stdout = sys.stdout # Save a reference to the original standard output
-dhtDevice = adafruit_dht.DHT11(board.D4)
-language = 'en'
-highHumidity = 35
-highTemp = 83
-medHumidity = 35
-medTemp = 83
-autoPowerOn = 85 
-callSign = "W R F R 8 8 6"
-tld="com.au"
-gennyRunning = 0
-snooze = 10
-enableDTMF = 1
+esng = ESpeakNG()
+class environmentThresholds:
+    def __init__(self, highHumidity, highTemp, medHumidity, medTemp):
+        self.highHumidity = highHumidity
+        self.highTemp = highTemp
+        self.medHumidity = medHumidity
+        self.medTemp = medTemp
+class setupPins:
+    def __init__(self, Temp1Pin, Temp2Pin, BigGenRunSense, LittleGenRunSense, LowVSense, PTTRelayPin, bigGenStartRelayPin, bigGenEnableRelayPin, LittleGenEnableRelayPin, ChargerEnableRelayPin, InverterEnableRelayPin, CT1):
+        try :
+            GPIO.setmode(GPIO.BCM)
+            GPIO.setup(Temp1Pin, GPIO.IN)
+            GPIO.setup(Temp2Pin, GPIO.IN)
+            GPIO.setup(BigGenRunSense, GPIO.IN)
+            GPIO.setup(LittleGenRunSense, GPIO.IN)
+            GPIO.setup(LowVSense, GPIO.IN)
+            GPIO.setup(CT1, GPIO.IN)
+            GPIO.setup(PTTRelayPin, GPIO.OUT)
+            GPIO.setup(bigGenStartRelayPin, GPIO.OUT)
+            GPIO.setup(bigGenEnableRelayPin, GPIO.OUT)
+            GPIO.setup(LittleGenEnableRelayPin, GPIO.OUT)
+            GPIO.setup(ChargerEnableRelayPin, GPIO.OUT)
+            GPIO.setup(InverterEnableRelayPin, GPIO.OUT)
+        except:
+            print("looks like we crapped out pants in setupPins")
+            exit
+        print("Setup Pins Done")
 
-RELAY_PTT_GPIO = 17
-RELAY_GENSTART_GPIO = 27
-GPIO.setmode(GPIO.BCM) # GPIO Numbers instead of board numbers
-GPIO.setup(RELAY_PTT_GPIO, GPIO.OUT) # GPIO Assign mode
-GPIO.setup(RELAY_GENSTART_GPIO, GPIO.OUT) # GPIO Assign mode
-engine = pyttsx3.init()
-
-def listenForDTMF() :
-    if enableDTMF == 1 :
-        it = "rtl_fm -M wbfm -f 146520000 -s 22050 | timeout {} multimon-ng -t raw -a FMSFSK -a AFSK1200 -a DTMF /dev/stdin > DTMF.txt &"
+class allRelaysDeenergize:
+    def __init__(self, PTTRelayPin, bigGenStartRelayPin, bigGenEnableRelayPin, LittleGenEnableRelayPin, ChargerEnableRelayPin, InverterEnableRelayPin):
+        #pull down all the relays.
+        GPIO.output(PTTRelayPin, GPIO.HIGH)
+        GPIO.output(bigGenStartRelayPin, GPIO.HIGH)
+        GPIO.output(bigGenEnableRelayPin, GPIO.HIGH)
+        GPIO.output(LittleGenEnableRelayPin, GPIO.HIGH)
+        GPIO.output(ChargerEnableRelayPin, GPIO.HIGH)
+        GPIO.output(InverterEnableRelayPin, GPIO.HIGH)
+        print("Relays all down")
+class radio:
+    def __init__(self, callSign, DTMFOperStatus, PTTRelayPin, freq):
+        self.PTTRealyPin = PTTRelayPin
+        self.callSign = callSign
+        self.DTMFOperStatus = DTMFOperStatus
+        self.freq = freq
+    #this is a method on the radio object
+    def enableDTMF(freq):
+        #self.freq = freq
+        DTMFOperStatus = True
+        it = "rtl_fm -M wbfm -f {} -s 22050 | multimon-ng -t raw -a FMSFSK -a AFSK1200 -a DTMF /dev/stdin > DTMF.txt & ".format(freq)
         os.system(it)
-        print("listening")
+        print("Listening to DTMF")
 
-def allRelaysHIGH() :
-        print("All Relays going HIGH(off)")
-        GPIO.output(RELAY_PTT_GPIO, GPIO.HIGH) # out
-        GPIO.output(RELAY_GENSTART_GPIO, GPIO.HIGH) # out
-        
-def gennyStatus() :
-    if GPIO.input(26):
-        print("Generator is ON")
-        gennyRunning = 1
-    else:
-        print("Generator is OFF")
-        gennyRunning = 0
 
-def callsign() :
-    try:
-        date = datetime.datetime.now()
-        text = "Hello, This is an automated reporting system, this is {}.".format(callSign)
-        print(text)
-        GPIO.output(RELAY_PTT_GPIO, GPIO.LOW) # on
-        time.sleep(.5)                
-        speak = 'espeak -s 125 "{}" > /dev/null 2>&1'.format(text)
-        os.system(speak)        
-        time.sleep(.5)
-        GPIO.output(RELAY_PTT_GPIO, GPIO.HIGH) # out
-        log = "{}, {}".format(date, text)
-        xmitLog = "echo {} >> /home/pi/monitor/xmit.log".format(log)
-        os.system(xmitLog)
-    except:
-        allRelaysHIGH
-        do_start 
-
-def startGenny() :
-    gennyStatus()
-    try:
-        if gennyRunning == 0 :
-            print("Starting Genny")
-            GPIO.output(RELAY_GENSTART_GPIO ,GPIO.LOW) # on
-            print("Cranking 1 seconds")
-            time.sleep(1)
-            GPIO.output(RELAY_GENSTART_GPIO, GPIO.HIGH) # on
-            GPIO.output(RELAY_PTT_GPIO, GPIO.LOW) # out
+    #this is a method on the radio object
+    def disableDTMF(self):
+        self.DTMFOperStatus = False
+    def xmit(self, xmitText, repeat):
+        while repeat > 0 :
+            esng.speed = 120
+            xmitStart = datetime.datetime.now()
+            GPIO.output(self.PTTRelayPin, GPIO.LOW) # xmit start
+            time.sleep(1.5)                
+            speak = 'espeak -s 125 "{}" > /dev/null 2>&1'.format(xmitText)
+            esng.say(xmitText)
+            os.system(speak)        
             time.sleep(.5)
-            print("Done Cranking, wait 30 seconds for power")
-            time.sleep(.5)
-            GPIO.output(RELAY_PTT_GPIO, GPIO.HIGH) # out
-            time.sleep(32)
-            gennyStatus()
-            if gennyRunning == 0 :
-                text = "good ole genny failed to start fall back is one minute and another attempt is made"
-                print(text)
-                GPIO.output(RELAY_PTT_GPIO, GPIO.LOW) # on
-                time.sleep(.5)
-                date = datetime.datetime.now()
-                speak = 'espeak -s 125 "{}" > /dev/null 2>&1'.format(text)
-                os.system(speak)                
-                time.sleep(.5)
-                GPIO.output(RELAY_PTT_GPIO, GPIO.HIGH) # out
-                log = "{}, {}".format(date, text)
-                xmitLog = "echo {} >> /home/pi/monitor/xmit.log".format(log)
-                os.system(xmitLog)
-            elif gennyRunning == 1 :
-                text = "genny has started monitoring will remain at one minute intervals untill temp is normal"
-                print(text)
-                GPIO.output(RELAY_PTT_GPIO, GPIO.LOW) # on
-                time.sleep(.5)
-                date = datetime.datetime.now()
-                speak = 'espeak -s 125 "{}" > /dev/null 2>&1'.format(text)
-                os.system(speak)   
-                os.system("mpg123 -q -o alsa:hw:1,0 text.mp3")
-                time.sleep(.5)
-                GPIO.output(RELAY_PTT_GPIO, GPIO.HIGH) # out
-                log = "{}, {}".format(date, text)
-                xmitLog = "echo {} >> /home/pi/monitor/xmit.log".format(log)
-                os.system(xmitLog)
-    except:
-        allRelaysHIGH
-        do_start
+            GPIO.output(self.PTTRelayPin, GPIO.HIGH) # xmit end
+            xmitEnd = datetime.datetime.now()
+            logging.info(xmitStart + xmitEnd + xmitText)
+            if repeat > 0 :
+                repeat = repeat-1
 
-def do_start() :
-        listenForDTMF()
-        allRelaysHIGH()
-        schedule.every(2).minutes.do(readTemp)
-        schedule.every(550).seconds.do(callsign)
-        #listenForDTMF()
-        #allRelaysHIGH()
-        readTemp()
+class controlGenerators:
+    def __init__(self, generatorEnableRelay, generatorStartRelay, gennyName, altCheckPin, PTTRelayPin) :
+        self.enableRelay = generatorEnableRelay
+        self.gennyName = gennyName
+        self.pin = altCheckPin
+        self.startRelay = generatorStartRelay
+        self.PTTRelayPin = PTTRelayPin
+    
+    def genStatus(self) :
+        output = GPIO.input(self.pin)
+        if output == 0 :
+            genRunning = True
+            return True
+        elif output == 1 :
+            genRunning = False
+            return False
+    
+    def stopGenerators(self, generatorEnableRelay, generatorStartRelay, gennyName, altCheckPin, PTTRelayPin) :
+        self.generatorEnableRelay = generatorEnableRelay
+        self.gennyName = gennyName
+        self.pin = altCheckPin
+        self.startRelay = generatorStartRelay
+        self.PTTRelayPin = PTTRelayPin
+        if controlGenerators.genStatus(self.pin) == True:
+            msg = "stopping little generator"
+            logging.info(msg)
+            GPIO.output(generatorEnableRelay, GPIO.HIGH)
+            time.sleep(5)
+        else :
+            msg = "Can't stop something not running. How did we get here?"
+            logging.info(msg)
+            return msg
+        output = GPIO.input(self.pin)
+        if output == 0 :
+            genRunning = True
+            msg = "{} generator failed to stop. Not good. What should we do now?".format(gennyName)
+            logging.info(msg)
+            radio.xmit(self.PTTRelayPin, msg, 1)
+            return msg
+        elif output == 1 :
+            genRunning = False
+            msg = "{} generator stopped".format(gennyName)
+            logging.info(msg)
+            radio.xmit(PTTRelayPin, msg, 1)
+            return msg
 
+class powerControl:
+    def __init__(self, gennyName, startRelay, enableRelay, InverterEnableRelayPin, ChargerEnableRelayPin, crankTime, altCheckPin, fuelLevel=0 ): 
+        self.fuelLevel = fuelLevel
+        self.gennyName = gennyName
+        self.startRelay = startRelay
+        self.enableRelay = enableRelay
+        self.inverterEnable = InverterEnableRelayPin    
+        self.chargerEnable = ChargerEnableRelayPin
+        self.crankTime = crankTime
+        self.altCheckPin = altCheckPin
+            
+if __name__ == "__main__":
 
-def readTemp() :
-    allRelaysHIGH()
-    while 1:
-        try:
-            temperature_c = dhtDevice.temperature
-            temperature_c = int(temperature_c)
-            temperature_f = temperature_c * (9 / 5) + 32
-            temperature_f = int(temperature_f)
-            humidity = dhtDevice.humidity
-            gennyStatus()
-            if temperature_f < medTemp :
-                if gennyRunning == 0 :
-                    text = "Hello, This is an automated reporting system, current conditions inside rosebud explorer the temperature is {}. humidity is {} percent, this is {}".format(temperature_f, humidity, callSign)
-                else:
-                    text = "Hello, This is an automated reporting system, current conditions inside rosebud explorer the temperature is {}. humidity is {} percent. The generator is running This is {}".format(temperature_f, humidity, callSign)
-                print(text)
-                GPIO.output(RELAY_PTT_GPIO, GPIO.LOW) # on
-                time.sleep(.5)      
-                date = datetime.datetime.now()          
-                speak = 'espeak -s 125 "{}" > /dev/null 2>&1'.format(text)
-                os.system(speak)         
-                time.sleep(.5)
-                date = datetime.datetime.now()
-                GPIO.output(RELAY_PTT_GPIO, GPIO.HIGH) # off
-                log = "{}, {}".format(date, text)
-                xmitLog = "echo {} >> /home/pi/monitor/xmit.log".format(log)
-                os.system(xmitLog)
-                break
-            elif temperature_f < highTemp and temperature_f > medTemp :
-                if gennyRunning == 0 :
-                    text = "Hello, This is an automated reporting system, current conditions inside rosebud explorer the temperature is {}. humidity is {} percent. this is getting warm! Fortunatlety the generator is running This is {}".format(temperature_f, humidity, callSign)
-                else :
-                    text = "Hello, This is an automated reporting system, current conditions inside rosebud explorer the temperature is {}. humidity is {} percent. this is getting warm! warning, generator is off This is {}".format(temperature_f, humidity, callSign)
-                print(text)
-                GPIO.output(RELAY_PTT_GPIO, GPIO.LOW) # on
-                time.sleep(.5)                
-                speak = 'espeak -s 125 "{}" > /dev/null 2>&1'.format(text)
-                os.system(speak) 
-                date = datetime.datetime.now()
-                time.sleep(.5)
-                GPIO.output(RELAY_PTT_GPIO, GPIO.HIGH) # off
-                log = "{}, {}".format(date, text)
-                xmitLog = "echo {} >> /home/pi/monitor/xmit.log".format(log)
-                os.system(xmitLog)
-            elif temperature_f > highTemp and gennyRunning == 0 :
-                text = "Hello, This is an automated reporting system, the conditions inside rosebud explorer the temperature is {} humidity is percent {} the generator is starting fallback is 30 seconds".format(temperature_f, humidity)
-                print(text1)               
-                GPIO.output(RELAY_PTT_GPIO, GPIO.LOW) # on
-                time.sleep(.5)                
-                speak = 'espeak -s 125 "{}" > /dev/null 2>&1'.format(text)
-                os.system(speak)       
-                date = datetime.datetime.now()      
-                time.sleep(2)
-                log = "{}, {}".format(date, text)
-                xmitLog = "echo {} >> /home/pi/monitor/xmit.log".format(log)
-                os.system(xmitLog)
-                speak = 'espeak -s 125 "{}" > /dev/null 2>&1'.format(text)
-                os.system(speak) 
-                date = datetime.datetime.now()
-                time.sleep(.5)
-                GPIO.output(RELAY_PTT_GPIO, GPIO.HIGH) # off
-                log = "{}, {}".format(date, text)
-                xmitLog = "echo {} >> /home/pi/monitor/xmit.log".format(log)
-                os.system(xmitLog)
-                startGenny()
-            elif temperature_f > highTemp and gennyRunning == 1 :
-                text = "Hello, This is an automated reporting system, the conditions inside rosebud explorer the temperature is {} humidity is percent {} the generator is running. reporting is set to one minute This is {}".format(temperature_f, humidity, callSign)
-                print(text1)
-                GPIO.output(RELAY_PTT_GPIO, GPIO.LOW) # on
-                time.sleep(.5)                
-                speak = 'espeak -s 125 "{}" > /dev/null 2>&1'.format(text)
-                os.system(speak)
-                date = datetime.datetime.now()
-                log = "{}, {}".format(date, text)
-                xmitLog = "echo {} >> /home/pi/monitor/xmit.log".format(log)
-                os.system(xmitLog)
-                os.system(speak)
-                date = datetime.datetime.now()             
-                time.sleep(2)
-                text = "repeating, repeating This is an automated reporting system, the conditions inside rosebud explorer the temperature is {} humidity is percent {} the generator is running. reporting is set to one minute This is {}".format(temperature_f, humidity, callSign)
-                speak = 'espeak -s 125 "{}" > /dev/null 2>&1'.format(text)
-                log = "{}, {}".format(date, text)
-                xmitLog = "echo {} >> /home/pi/monitor/xmit.log".format(log)
-                os.system(xmitLog)
-                os.system(speak) 
-                date = datetime.datetime.now()             
-                time.sleep(.5)
-                log = "{}, {}".format(date, text)
-                xmitLog = "echo {} >> /home/pi/monitor/xmit.log".format(log)
-                GPIO.output(RELAY_PTT_GPIO, GPIO.HIGH) # off.
-        except:    
-            allRelaysHIGH()
-            readTemp()
-
-do_start()
-
-while 1:
-    schedule.run_pending()
-    time.sleep(1)
+    logging.basicConfig(level=logging.DEBUG,
+                        format='%(asctime)s %(levelname)s %(message)s',
+                        filename='smartRV.log',
+                        filemode='a+')
+    logging.info('Starting SmartRV...')
 
 
+
+
+    with open(r'./config.yaml') as configFile: 
+        #using the with command with the open is a context manager
+        # and will auto close after the operations are done
+        # print(configFile.read()) #Reading file as text
+        configParams = yaml.load(configFile, Loader=yaml.FullLoader) #converting text to a dict(in-memory k,v store) 
+
+        env = environmentThresholds(configParams['highHumidity'],
+                                    configParams['highTemp'],
+                                    configParams['medHumidity'],
+                                    configParams['medTemp']) 
+        radio(configParams['DTMFOperStatus'],
+                    configParams['callSign'],
+                    configParams['PTTRelayPin'],
+                    configParams['freq']) 
+        bigGen = controlGenerators(configParams['bigGenEnableRelayPin'],
+                        configParams['bigGenStartRelayPin'],
+                        configParams['bigGenName'],
+                        configParams['bigAltCheckPin'],
+                        configParams['PTTRelayPin'])
+        littleGen = controlGenerators(configParams['littleGenEnableRelayPin'],
+                        configParams['littleGenStartRelayPin'],
+                        configParams['littleGenName'],
+                        configParams['littleAltCheckPin'],
+                        configParams['PTTRelayPin'])                        
+        setupPins(configParams['Temp1Pin'],
+                configParams['Temp2Pin'],
+                configParams['bigAltCheckPin'],
+                configParams['littleAltCheckPin'],
+                configParams['LowVSense'],
+                configParams['PTTRelayPin'],
+                configParams['bigGenStartRelayPin'],
+                configParams['bigGenEnableRelayPin'],
+                configParams['littleGenEnableRelayPin'],
+                configParams['ChargerEnableRelayPin'],
+                configParams['InverterEnableRelayPin'],
+                configParams['CT1'])   
+  
+                    
+    print(f"this is the big gen name {bigGen.gennyName}")
+    print(bigGen.enableRelay, bigGen.startRelay, bigGen.gennyName, bigGen.pin, bigGen.PTTRelayPin)
+    ###########
+    # this works, but doesnt background
+    # test it when you get a chance
+    #radio.enableDTMF("462.7250M")
+    
+    ###########
+    # this?
+    # controlGenerators.stopGenerators(bigGen.enableRelay, bigGen.startRelay, bigGen.gennyName, bigGen.pin, bigGen.PTTRelayPin)
+    # or this
+    # controlGenerators.stopGenerators(bigGen)
+    # wontwork
+
+    
