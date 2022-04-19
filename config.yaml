@@ -2,7 +2,7 @@ highHumidity: 35
 highTemp: 83
 medHumidity: 35
 medTemp: 83
-autoPowerOn: 85 
+autoPowerOn: 85
 callSign: "W R F R 8 8 6"
 gennyRunning: 0
 snooze: 10
@@ -21,7 +21,13 @@ BigGenRunSense: 18
 LittleGenRunSense: 23
 LowVSense: 27
 CT1: 22
-shuntBatt1: 40 
-shuntBatt2: 41
 shuntCharger: 42
 shuntSelfDraw: 43
+shunt1ohms: 1
+shunt1address: 40
+shunt2ohms: 2
+shunt2address: 41
+shunt3ohms: 2
+shunt3address: 42
+shunt4ohms: 2
+shunt4address: 43
