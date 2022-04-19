@@ -1,4 +1,3 @@
-#!/c/Users/Jeremy/AppData/Local/Programs/Python/Python38-32/python
 import logging
 import yaml
 import adafruit_dht
@@ -48,10 +47,10 @@ class radio:
         self.DTMFOperStatus = True
     #this is a method on the radio object
     def disableDTMF(self):
-        self.DTMFOperStatus = False     
+        self.DTMFOperStatus = False
 
 class powerControl:
-    def __init__(self, BigGennyName, LittleGennyName, BigGenStartRelayPin, BigGenEnableRelayPin, LittleGenEnableRelayPin, InverterEnableRelayPin, ChargerEnableRelayPin, BigGenRunning=False, fuelLevel=0,): 
+    def __init__(self, BigGennyName, LittleGennyName, BigGenStartRelayPin, BigGenEnableRelayPin, LittleGenEnableRelayPin, InverterEnableRelayPin, ChargerEnableRelayPin, BigGenRunning=False, fuelLevel=0,):
         self.BigGenRunning = BigGenRunning
         self.fuelLevel = fuelLevel
         self.BigName = BigGennyName
@@ -82,32 +81,32 @@ class powerControl:
             msg = "starting generator"
             logging.info(msg + " " + self.Name)
             #TODO need to add logic to actually start genny
-            return msg 
+            return msg
         else:
             msg = "Unable to start generator, it is already running"
-            logging.info(msg + " " + self.Name) 
-            return msg 
+            logging.info(msg + " " + self.Name)
+            return msg
 
     def stopBigGen(self):
         if self.checkBigGenStatus() == True:
             msg = "stopping generator"
-            logging.info(msg + " " + self.Name) 
+            logging.info(msg + " " + self.Name)
             #TODO need to add logic to actually stop genny
-            return msg 
+            return msg
         else:
             msg = "Unable to stop generator, it is not running"
-            logging.info(msg + " " + self.Name) 
-            return msg 
+            logging.info(msg + " " + self.Name)
+            return msg
     def stopLittleGen(self):
         if self.checkLittleGenStatus() == True:
             msg = "stopping generator"
-            logging.info(msg + " " + self.Name) 
+            logging.info(msg + " " + self.Name)
             #TODO need to add logic to actually stop genny
-            return msg 
+            return msg
         else:
             msg = "Unable to stop generator, it is not running"
-            logging.info(msg + " " + self.Name) 
-            return msg 
+            logging.info(msg + " " + self.Name)
+            return msg
 
 
 if __name__ == "__main__":
@@ -118,36 +117,36 @@ if __name__ == "__main__":
                         filemode='a+')
     logging.info('Starting SmartRV...')
 
-    with open(r'./config.yaml') as configFile: 
+    with open(r'./config.yaml') as configFile:
         #using the with command with the open is a context manager
         # and will auto close after the operations are done
         # print(configFile.read()) #Reading file as text
-        configParams = yaml.load(configFile, Loader=yaml.FullLoader) #converting text to a dict(in-memory k,v store) 
+        configParams = yaml.load(configFile, Loader=yaml.FullLoader) #converting text to a dict(in-memory k,v store)
         # print(configParams['highTemp']) #Printing specific parameter from dict
 
         env = environmentThresholds(configParams['highHumidity'],
                           configParams['highTemp'],
                           configParams['medHumidity'],
-                          configParams['medTemp']) 
+                          configParams['medTemp'])
         #assigning dict valuses to an object
 
         rad = radio(configParams['callSign'],
                     configParams['DTMFOperStatus'],
-                    configParams['PTTRelayPin']) 
+                    configParams['PTTRelayPin'])
         #assigning dict valuses to an object
 
         #the things that are read into the powerControl object are read in order. You can assign them all manually but it's not really necessary
-        onBoardGenny = powerControl(configParams['BigGennyName'], 
-                                 configParams['BigGenStarter'], 
+        onBoardGenny = powerControl(configParams['BigGennyName'],
+                                 configParams['BigGenStarter'],
                                  configParams['BigGenEnable'])
-        babyGenny = powerControl(configParams['LittleGennyName'], 
+        babyGenny = powerControl(configParams['LittleGennyName'],
                               configParams['LittleGenEnable'])
         inverter = powerControl(configParams['InverterEnable'])
-        charger = powerControl(configParams['ChargerEnable'])                              
+        charger = powerControl(configParams['ChargerEnable'])
 
     setupPins()
     allRelaysDeenergize()
-    print(env.highHumidity)   
+    print(env.highHumidity)
     print(rad.DTMFOperStatus)
     print(rad.callSign)
     print(onBoardGenny.Name)
@@ -162,8 +161,3 @@ if __name__ == "__main__":
     print("Little Genny relay enable pin "+babyGenny.LittleGenEnableRelayPin)
     print("Little Genny relay enable pin "+inverter.InverterEnableRelayPin)
     print("Little Genny relay enable pin "+charger.ChargerEnableRelayPin)
-    
-
-
-
-
