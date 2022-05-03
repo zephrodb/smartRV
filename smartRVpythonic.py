@@ -12,7 +12,8 @@ import time
 from espeakng import ESpeakNG
 import random 
 import SDL_Pi_INA3221
-from influxdb_client import InfluxDBClient, Point
+import influxdb_client
+from influxdb_client import Point, InfluxDBClient
 from influxdb_client.client.write_api import ASYNCHRONOUS
 
 
@@ -149,12 +150,15 @@ class powerControl:
             return msg
 
 class powerMonitor:
-    def __init__(self, shuntAddress, shunt1name, shunt2name, shunt3name):
+    def __init__(self, shuntAddress, shunt1name, shunt2name, shunt3name, influxBucket, influxURL, influxToken, influxORG):
         self.shuntAddress = shuntAddress
         self.shunt1name = shunt1name
         self.shunt2name = shunt2name
         self.shunt3name = shunt3name
-
+        self.influxORG = influxORG
+        self.influxToken = influxToken
+        self.influxURL = influxURL
+        self.influxBucket = influxBucket
     def readBatteries(self):
         ina3221 = SDL_Pi_INA3221.SDL_Pi_INA3221(addr=0x43)
         busvoltage1 = ina3221.getBusVoltage_V(1)
@@ -181,18 +185,22 @@ class powerMonitor:
         influx.writeInflux(self, measurment="current_mA3", unit="mA", value=current_mA3)
 
 class influx:
-    def __init__(self,  influxBucket):
+    def __init__(self,  influxBucket, influxURL, influxToken, influxORG ):
         #self.InfluxDBClient = InfluxDBClient
         self.influxBucket = influxBucket
-        self.write_api = InfluxDBClient.write_api(self, write_options=ASYNCHRONOUS),
+        #self.write_api = InfluxDBClient.write_api(self, write_options=ASYNCHRONOUS)
+        self.client = influxdb_client.InfluxDBClient(influxURL, influxToken, influxORG)
+        self.influxORG = influxORG
+        self.influxToken = influxToken
+        self.influxURL = influxURL
     def writeInflux(self, measurment, unit, value):
         self.measurment = measurment
         self.unit = unit
         self.value = value
         self.now = int(time.time_ns() )
-        self.data = Point(measurment) .field(unit, value) .time(self.now)
-        self.write_api.write(bucket=self.influxBucket, record=self.data)
-
+        self.data = Point(measurment) .field(self.unit, self.value) .time(self.now)
+        print(self.data)
+        write(bucket=self.influxBucket, org=self.influxORG, record=self.data)
 
 if __name__ == "__main__":
 
@@ -252,11 +260,18 @@ if __name__ == "__main__":
                                 configParams['chargerEnable_out'],
                                 configParams['relayHatBus'],
                                 configParams['relayHatAddress'])
-        shunts = powerMonitor(configParams['shuntAddress'],
+        shunts = powerMonitor(configParams['shuntSensor1address'],
                                 configParams['shunt1name'],
                                 configParams['shunt2name'],
-                                configParams['shunt3name'])
-        write = influx(configParams['influxBucket'])                        
+                                configParams['shunt3name'],
+                                configParams['influxBucket'],
+                                configParams['influxURL'],
+                                configParams['influxToken'],
+                                configParams['influxORG'])
+        write = influx(configParams['influxBucket'],
+                        configParams['influxURL'],
+                        configParams['influxToken'],
+                        configParams['influxORG'])                        
 
     while True:
         powerMonitor.readBatteries(shunts)
