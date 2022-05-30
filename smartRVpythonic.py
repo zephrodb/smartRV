@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 import logging
 from os import system
+from turtle import up
 import unittest
 import yaml
 import adafruit_dht
@@ -15,6 +16,7 @@ import SDL_Pi_INA3221
 import influxdb_client
 from influxdb_client import Point, InfluxDBClient
 from influxdb_client.client.write_api import ASYNCHRONOUS
+import argparse
 
 
 class environmentThresholds:
@@ -24,53 +26,56 @@ class environmentThresholds:
         self.medHumidity = medHumidity
         self.medTemp = medTemp
 class setupPins:
-    def __init__(self, temp1_in, temp2_in, gen1Run_in, gen2Run_in, volt1_in, ptt_out, gen1Start_out, gen1Stop_out, gen2Enable_out, chargerEnable_out, inverterEnable_out, ct1_in):
+    def __init__(self, temp1_in, ptt_out, radioCharger1_out, radioCharger2_out):
         GPIO.setmode(GPIO.BCM)
         GPIO.setup(temp1_in, GPIO.IN)
-        GPIO.setup(temp2_in, GPIO.IN)
-        GPIO.setup(gen1Run_in, GPIO.IN)
-        GPIO.setup(gen2Run_in, GPIO.IN)
-        GPIO.setup(volt1_in, GPIO.IN)
-        GPIO.setup(ct1_in, GPIO.IN)
         GPIO.setup(ptt_out, GPIO.OUT)
-        GPIO.setup(gen1Start_out, GPIO.OUT)
-        GPIO.setup(gen1Stop_out, GPIO.OUT)
-        GPIO.setup(gen2Enable_out, GPIO.OUT)
-        GPIO.setup(chargerEnable_out, GPIO.OUT)
-        GPIO.setup(inverterEnable_out, GPIO.OUT)
-        print("Setup Pins")
+        GPIO.setup(radioCharger1_out, GPIO.OUT)
+        GPIO.setup(radioCharger2_out, GPIO.OUT)
 
-class allRelaysDeenergize:
-    def __init__(self, ptt_out, gen1Start_out, gen1Stop_out, gen2Enable_out, chargerEnable_out, inverterEnable_out, relayHatBus, relayHatAddress):
+
+class setupRelays:
+    def __init__(self, ptt_out, gen1Start_out, chargerEnable_out, inverterEnable_out, relayHatBus, relayHatAddress, radioCharger_out):
         smbus.SMBus(relayHatBus).write_byte_data(relayHatAddress, ptt_out, 0x00)
-        relayHatBus.write_byte_data(relayHatAddress, gen1Start_out, 0x00)
+        relayHatBus.write_byte_data(relayHatAddress, gen1Start_out, 0x00)    
         relayHatBus.write_byte_data(relayHatAddress, chargerEnable_out, 0x00)
         relayHatBus.write_byte_data(relayHatAddress, inverterEnable_out, 0x00)
-        #do we really want to stop the gen on init?
+        ## always start charging on startup. we can turn it off later.
+        GPIO.output(radioCharger_out, GPIO.LOW)
+        GPIO.output(radioCharger_out, GPIO.LOW)
+        ## make sure we arent dead keying
+        GPIO.output(ptt_out, GPIO.HIGH)
+        ## do we really want to stop the gen on init? not for me...
         #relayHatBus.write_byte_data(gen1Stop_out, ptt_out, 0x00)
         #relayHatBus.write_byte_data(gen2Enable_out, ptt_out, 0x00)        
-        print("Relays all down")
+
 class radio:
-    def __init__(self, callSign, DTMFOperStatus, relayHatBus, relayHatAddress, ptt_out):
+    def __init__(self, callSign, DTMFOperStatus, relayHatBus, relayHatAddress, ptt_out, radioCharger1_out, radioCharger2_out):
         self.callSign = callSign
         self.DTMFOperStatus = DTMFOperStatus
-        self.ptt_out = ptt_out
-        #self.msg = msg
         self.relayHatBus = relayHatBus
         self.relayHatAddress = relayHatAddress
-    #this is a method on the radio object
+        self.ptt_out = ptt_out
+        self.radioCharger1_out = radioCharger1_out
+        self.radioCharger2_out = radioCharger2_out
     def pttDown(self):
-        smbus.SMBus(1).write_byte_data(0x10, 1, 0xFF)
+        GPIO.output(self.radioCharger1_out, GPIO.HIGH)
+        GPIO.output(self.radioCharger2_out, GPIO.HIGH)
+        time.sleep(0.1)
+        GPIO.output(self.ptt_out, GPIO.LOW)
 
     def pttUp(self):
-        smbus.SMBus(1).write_byte_data(0x10, 1,  0x00)
+        GPIO.output(self.ptt_out, GPIO.HIGH)
+        time.sleep(0.1)
+        GPIO.output(self.radioCharger1_out, GPIO.LOW)
+        GPIO.output(self.radioCharger2_out, GPIO.LOW)
 
     def enableDTMF(self):
         self.DTMFOperStatus = True
     #this is a method on the radio object
     def disableDTMF(self):
         self.DTMFOperStatus = False
-    def sendRadioMessage(self):
+    def sendRadioMessage(self, msg):
         esng = ESpeakNG(voice='en-us')
         esng.speed = 120
         tones = "echo {} | minimodem -t 1200 -f /tmp/temp.wav".format(msg)
@@ -84,7 +89,8 @@ class radio:
         radio.pttUp(self)
     def sendCallsign(self):
         msg = "This is an automated reporting station and open repeater Operated by {}".format(self.callSign)
-        radio.sendRadioMessage(msg)
+        radio.sendRadioMessage(self, msg)
+
 class powerControl:
     def __init__(self, gen1Name, gen2Name, gen1Start_out, gen1Stop_out, gen2Enable_out, inverterEnable_out, chargerEnable_out, relayHatBus, relayHatAddress, gen1Run_in=False, fuelLevel=0,):
         self.gen1Run_in = gen1Run_in
@@ -149,40 +155,42 @@ class powerControl:
             logging.info(msg + " " + self.Name)
             return msg
 
-class powerMonitor:
-    def __init__(self, shuntAddress, shunt1name, shunt2name, shunt3name, influxBucket, influxURL, influxToken, influxORG):
-        self.shuntAddress = shuntAddress
-        self.shunt1name = shunt1name
-        self.shunt2name = shunt2name
-        self.shunt3name = shunt3name
-        self.influxORG = influxORG
-        self.influxToken = influxToken
-        self.influxURL = influxURL
-        self.influxBucket = influxBucket
-    def readBatteries(self):
-        ina3221 = SDL_Pi_INA3221.SDL_Pi_INA3221(addr=0x43)
-        busvoltage1 = ina3221.getBusVoltage_V(1)
-        shuntvoltage1 = ina3221.getShuntVoltage_mV(1)
-        current_mA1 = ina3221.getCurrent_mA(1)  
-        loadvoltage1 = busvoltage1 + (shuntvoltage1 / 1000)
-        busvoltage2 = ina3221.getBusVoltage_V(2)
-        shuntvoltage2 = ina3221.getShuntVoltage_mV(2)
-        current_mA2 = ina3221.getCurrent_mA(2)  
-        loadvoltage2 = busvoltage2 + (shuntvoltage2 / 1000)
-        busvoltage3 = ina3221.getBusVoltage_V(3)
-        shuntvoltage3 = ina3221.getShuntVoltage_mV(3)
-        current_mA3 = ina3221.getCurrent_mA(3)  
-        loadvoltage3 = busvoltage3 + (shuntvoltage3 / 1000)
-
-        print(f"{busvoltage1}, {shuntvoltage1}, {current_mA1}, {loadvoltage1}")
-        influx.writeInflux(self, measurment="shuntvoltage1", unit="Volt", value=shuntvoltage1)
-        influx.writeInflux(self, measurment="current_mA1", unit="mA", value=current_mA1)
-        print(f"{busvoltage2}, {shuntvoltage2}, {current_mA2}, {loadvoltage2}")
-        influx.writeInflux(self, measurment="shuntvoltage2", unit="Volt", value=shuntvoltage2)
-        influx.writeInflux(self, measurment="current_mA2", unit="mA", value=current_mA2)
-        print(f"{busvoltage3}, {shuntvoltage3}, {current_mA3}, {loadvoltage3}")
-        influx.writeInflux(self, measurment="shuntvoltage3", unit="Volt", value=shuntvoltage3)
-        influx.writeInflux(self, measurment="current_mA3", unit="mA", value=current_mA3)
+# class powerMonitor:
+#     def __init__(self, shuntAddress, shunt1name, shunt2name, shunt3name, influxBucket, influxURL, influxToken, influxORG):
+#         self.shuntAddress = shuntAddress
+#         self.shunt1name = shunt1name
+#         self.shunt2name = shunt2name
+#         self.shunt3name = shunt3name
+#         self.influxORG = influxORG
+#         self.influxToken = influxToken
+#         self.influxURL = influxURL
+#         self.influxBucket = influxBucket
+#         self.client = influxdb_client.InfluxDBClient(influxURL, influxToken, influxORG)
+#         self.write_api = self.client.write_api(write_options=ASYNCHRONOUS)
+#     def readBatteries(self):
+#         ina3221 = SDL_Pi_INA3221.SDL_Pi_INA3221(addr=0x43)
+#         busvoltage1 = ina3221.getBusVoltage_V(1)
+#         shuntvoltage1 = ina3221.getShuntVoltage_mV(1)
+#         current_mA1 = ina3221.getCurrent_mA(1)  
+#         loadvoltage1 = busvoltage1 + (shuntvoltage1 / 1000)
+#         busvoltage2 = ina3221.getBusVoltage_V(2)
+#         shuntvoltage2 = ina3221.getShuntVoltage_mV(2)
+#         current_mA2 = ina3221.getCurrent_mA(2)  
+#         loadvoltage2 = busvoltage2 + (shuntvoltage2 / 1000)
+#         busvoltage3 = ina3221.getBusVoltage_V(3)
+#         shuntvoltage3 = ina3221.getShuntVoltage_mV(3)
+#         current_mA3 = ina3221.getCurrent_mA(3)  
+#         loadvoltage3 = busvoltage3 + (shuntvoltage3 / 1000)
+#         system("clear")
+#         print(f"{busvoltage1}, {shuntvoltage1}, {current_mA1}, {loadvoltage1}")
+#         influx.writeInflux(self, measurment="shuntvoltage1", unit="Volt", value=shuntvoltage1)
+#         influx.writeInflux(self, measurment="current_mA1", unit="mA", value=current_mA1)
+#         print(f"{busvoltage2}, {shuntvoltage2}, {current_mA2}, {loadvoltage2}")
+#         influx.writeInflux(self, measurment="shuntvoltage2", unit="Volt", value=shuntvoltage2)
+#         influx.writeInflux(self, measurment="current_mA2", unit="mA", value=current_mA2)
+#         print(f"{busvoltage3}, {shuntvoltage3}, {current_mA3}, {loadvoltage3}")
+#         influx.writeInflux(self, measurment="shuntvoltage3", unit="Volt", value=shuntvoltage3)
+#         influx.writeInflux(self, measurment="current_mA3", unit="mA", value=current_mA3)
 
 class influx:
     def __init__(self,  influxBucket, influxURL, influxToken, influxORG ):
@@ -193,15 +201,20 @@ class influx:
         self.influxORG = influxORG
         self.influxToken = influxToken
         self.influxURL = influxURL
+        self.write_api = self.client.write_api(write_options=ASYNCHRONOUS)
     def writeInflux(self, measurment, unit, value):
         self.measurment = measurment
         self.unit = unit
         self.value = value
-        self.now = int(time.time_ns() )
-        self.data = Point(measurment) .field(self.unit, self.value) .time(self.now)
+        self.now = int(time.time_ns())
+        write_json[0]['measurement'] = self.measurment
+        write_json[0]['fields'][self.unit] = self.value
+        write_json[0]['time'] = self.now
+        print("Write points: {0}".format(write_json))
+        self.write_api.write_points(write_json)
         print(self.data)
-        write(bucket=self.influxBucket, org=self.influxORG, record=self.data)
-
+        self.write_api.write(bucket=self.influxBucket, org=self.influxORG, record=self.data)
+        time.sleep(1)
 if __name__ == "__main__":
 
     logging.basicConfig(level=logging.DEBUG,
@@ -222,7 +235,9 @@ if __name__ == "__main__":
                     configParams['DTMFOperStatus'],
                     configParams['relayHatBus'],
                     configParams['relayHatAddress'],
-                    configParams['ptt_out'])
+                    configParams['ptt_out'],
+                    configParams['radioCharger1_out'],
+                    configParams['radioCharger2_out'])
 
         gen1 = powerControl(configParams['gen1Name'],
                                  configParams['gen1Start_out'],
@@ -260,20 +275,51 @@ if __name__ == "__main__":
                                 configParams['chargerEnable_out'],
                                 configParams['relayHatBus'],
                                 configParams['relayHatAddress'])
-        shunts = powerMonitor(configParams['shuntSensor1address'],
-                                configParams['shunt1name'],
-                                configParams['shunt2name'],
-                                configParams['shunt3name'],
-                                configParams['influxBucket'],
-                                configParams['influxURL'],
-                                configParams['influxToken'],
-                                configParams['influxORG'])
+        # shunts = powerMonitor(configParams['shuntSensor1address'],
+        #                         configParams['shunt1name'],
+        #                         configParams['shunt2name'],
+        #                         configParams['shunt3name'],
+        #                         configParams['influxBucket'],
+        #                         configParams['influxURL'],
+        #                         configParams['influxToken'],
+        #                         configParams['influxORG'])
         write = influx(configParams['influxBucket'],
                         configParams['influxURL'],
                         configParams['influxToken'],
-                        configParams['influxORG'])                        
-
+                        configParams['influxORG'])     
+        pins = setupPins(configParams['temp1_in'],
+                        configParams['ptt_out'],
+                        configParams['radioCharger1_out'],
+                        configParams['radioCharger2_out'])  
+        #relays = setupRelays(configParams['temp1_in'],
+        #                    configParams['ptt_out'],
+        #                    configParams['radioCharger1_out'],
+        #                    configParams['radioCharger2_out'])                 
+    
+    
+    
+    
+    
+    
+    
+    setupPins(22, 27, 20, 21)
+    #setupRelays(relays)
+    GPIO.output(20, GPIO.LOW)
+    GPIO.output(21, GPIO.LOW)
+    # make sure we arent dead keying
+    GPIO.output(27, GPIO.HIGH)
+    
+    
+    
     while True:
-        powerMonitor.readBatteries(shunts)
-        time.sleep(1)
+        i=1
+        while i < 7 :
+            powerMonitor.readBatteries(shunts)
+            time.sleep(10)
+            print()
+            i += 1
+        radio.sendCallsign(rad)
+        
+
+
 

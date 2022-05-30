@@ -3,12 +3,12 @@ callSign: "W R F R 8 8 6"
 chargerEnable_out: 24
 ct1_in: 22
 DTMFOperStatus: true
-gen1Name: "60A BEAST"
+gen1Name: "ONAN-6500W"
 gen1Run_in: 18
 gen1Start_out: 3
 gen1Stop_out: 2
 gen2Enable_out: 20
-gen2Name: "wen"
+gen2Name: "WEN-1900W"
 gen2Run_in: 23
 gennyRunning: 0
 highHumidity: 35
@@ -20,7 +20,9 @@ influxURL: "http://localhost"
 inverterEnable_out: 4
 medHumidity: 35
 medTemp: 83
-ptt_out: 1
+ptt_out: 27
+radioCharger1_out: 20
+radioCharger2_out: 21
 relayHatAddress: 0x10
 #relayHatBus: 1
 relayHatBus: "smbus.SMBus(relayHatBus)"
@@ -29,6 +31,6 @@ shunt1name: "Coach1"
 shunt2name: "Coach2"
 shunt3name: "Chassis"
 snooze: 10
-temp1_in: 4
+temp1_in: 22
 temp2_in: 17
-volt1_in: 27
+
