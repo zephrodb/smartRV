@@ -17,7 +17,7 @@ import influxdb_client
 from influxdb_client import Point, InfluxDBClient
 from influxdb_client.client.write_api import ASYNCHRONOUS
 import argparse
-
+import paho.mqtt.client as mqtt
 
 class environmentThresholds:
     def __init__(self, highHumidity, highTemp, medHumidity, medTemp):
@@ -215,6 +215,27 @@ class influx:
         print(self.data)
         self.write_api.write(bucket=self.influxBucket, org=self.influxORG, record=self.data)
         time.sleep(1)
+
+class mqtt_sub:
+    def __init__(self, mqtt_feed, mqtt_host, mqtt_password, mqtt_port, mqtt_username):
+        self.mqtt_feed = mqtt_feed
+        self.mqtt_host = mqtt_host
+        self.mqtt_password = mqtt_password
+        self.mqtt_port = mqtt_port
+        self.mqtt_username = mqtt_username
+        
+        self.client = mqtt.Client("digi_mqtt_test")  # Create instance of client with client ID “digi_mqtt_test”
+        self.client.username_pw_set(self.mqtt_username, self.mqtt_password)
+        self.client.on_connect = on_connect  # Define callback function for successful connection
+        self.client.on_message = on_message  # Define callback function for receipt of a message
+        self.client.connect(self.mqtt_host, self.mqtt_port)
+        self.client.loop_forever()  # Start networking daemon
+    def watch_temp(self):
+
+
+
+
+
 if __name__ == "__main__":
 
     logging.basicConfig(level=logging.DEBUG,
@@ -275,14 +296,6 @@ if __name__ == "__main__":
                                 configParams['chargerEnable_out'],
                                 configParams['relayHatBus'],
                                 configParams['relayHatAddress'])
-        # shunts = powerMonitor(configParams['shuntSensor1address'],
-        #                         configParams['shunt1name'],
-        #                         configParams['shunt2name'],
-        #                         configParams['shunt3name'],
-        #                         configParams['influxBucket'],
-        #                         configParams['influxURL'],
-        #                         configParams['influxToken'],
-        #                         configParams['influxORG'])
         write = influx(configParams['influxBucket'],
                         configParams['influxURL'],
                         configParams['influxToken'],
@@ -294,7 +307,12 @@ if __name__ == "__main__":
         #relays = setupRelays(configParams['temp1_in'],
         #                    configParams['ptt_out'],
         #                    configParams['radioCharger1_out'],
-        #                    configParams['radioCharger2_out'])                 
+        #                    configParams['radioCharger2_out'])     
+        mqtt_feed = mqtt_sub(configParams['mqtt_feed'],
+                            configParams['mqtt_host'],
+                            configParams['mqtt_password'],
+                            configParams['mqtt_port'],
+                            configParams['mqtt_username'])            
     
     
     

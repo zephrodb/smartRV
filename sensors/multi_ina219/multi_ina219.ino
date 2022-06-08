@@ -97,13 +97,13 @@ void loop(void)
     String humi_t = String(humi, 1);
     String temp_t = String(temp, 1);
     String hi_t = String(hi, 1);
-    sprintf(buffer, "t_0,location=interior temp_f=%s ", temp_t);
+    sprintf(buffer, "t_0,location=interior temp_F=%s ", temp_t);
     Serial.println(buffer);
     pub_measurment.publish(buffer);
-    sprintf(buffer, "h_0,location=interior RH=%s ", humi_t);
+    sprintf(buffer, "t_0,location=interior RH=%s ", humi_t);
     Serial.println(buffer);
     pub_measurment.publish(buffer);
-    sprintf(buffer, "hi_0,location=interior HI=%s ", hi_t);
+    sprintf(buffer, "t_0,location=interior HI=%s ", hi_t);
     Serial.println(buffer);
     pub_measurment.publish(buffer);
   }
