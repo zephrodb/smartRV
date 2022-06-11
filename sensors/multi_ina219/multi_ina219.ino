@@ -40,7 +40,7 @@ Adafruit_MQTT_Publish pub_measurment = Adafruit_MQTT_Publish(&mqtt, FEED);
 /************************  ammeter setup  **************************************/
 
 INA219 ina219_A = INA219(0x40, 0.00025);
-INA219 ina219_B = INA219(0x45, 0.00025);
+INA219 ina219_B = INA219(0x44, 0.00025);
 INA219 ina219_C = INA219(0x44, 0.00025);
 INA219 ina219_D = INA219(0x45, 0.00025);
 

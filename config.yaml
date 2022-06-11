@@ -38,4 +38,5 @@ shunt3name: "Chassis"
 snooze: 10
 temp1_in: 22
 temp2_in: 17
+windowsTitle: "Control Panel"
 

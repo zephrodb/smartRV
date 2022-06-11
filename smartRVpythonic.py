@@ -192,29 +192,31 @@ class powerControl:
 #         influx.writeInflux(self, measurment="shuntvoltage3", unit="Volt", value=shuntvoltage3)
 #         influx.writeInflux(self, measurment="current_mA3", unit="mA", value=current_mA3)
 
-class influx:
-    def __init__(self,  influxBucket, influxURL, influxToken, influxORG ):
-        #self.InfluxDBClient = InfluxDBClient
-        self.influxBucket = influxBucket
-        #self.write_api = InfluxDBClient.write_api(self, write_options=ASYNCHRONOUS)
-        self.client = influxdb_client.InfluxDBClient(influxURL, influxToken, influxORG)
-        self.influxORG = influxORG
-        self.influxToken = influxToken
-        self.influxURL = influxURL
-        self.write_api = self.client.write_api(write_options=ASYNCHRONOUS)
-    def writeInflux(self, measurment, unit, value):
-        self.measurment = measurment
-        self.unit = unit
-        self.value = value
-        self.now = int(time.time_ns())
-        write_json[0]['measurement'] = self.measurment
-        write_json[0]['fields'][self.unit] = self.value
-        write_json[0]['time'] = self.now
-        print("Write points: {0}".format(write_json))
-        self.write_api.write_points(write_json)
-        print(self.data)
-        self.write_api.write(bucket=self.influxBucket, org=self.influxORG, record=self.data)
-        time.sleep(1)
+
+# class influx:
+#     def __init__(self,  influxBucket, influxURL, influxToken, influxORG ):
+#         #self.InfluxDBClient = InfluxDBClient
+#         self.influxBucket = influxBucket
+#         #self.write_api = InfluxDBClient.write_api(self, write_options=ASYNCHRONOUS)
+#         self.client = influxdb_client.InfluxDBClient(influxURL, influxToken, influxORG)
+#         self.influxORG = influxORG
+#         self.influxToken = influxToken
+#         self.influxURL = influxURL
+#         self.write_api = self.client.write_api(write_options=ASYNCHRONOUS)
+#     def writeInflux(self, measurment, unit, value):
+#         self.measurment = measurment
+#         self.unit = unit
+#         self.value = value
+#         self.now = int(time.time_ns())
+#         write_json[0]['measurement'] = self.measurment
+#         write_json[0]['fields'][self.unit] = self.value
+#         write_json[0]['time'] = self.now
+#         print("Write points: {0}".format(write_json))
+#         self.write_api.write_points(write_json)
+#         print(self.data)
+#         self.write_api.write(bucket=self.influxBucket, org=self.influxORG, record=self.data)
+#         time.sleep(1)
+
 
 class mqtt_sub:
     def __init__(self, mqtt_feed, mqtt_host, mqtt_password, mqtt_port, mqtt_username):
@@ -223,14 +225,23 @@ class mqtt_sub:
         self.mqtt_password = mqtt_password
         self.mqtt_port = mqtt_port
         self.mqtt_username = mqtt_username
-        
         self.client = mqtt.Client("digi_mqtt_test")  # Create instance of client with client ID “digi_mqtt_test”
         self.client.username_pw_set(self.mqtt_username, self.mqtt_password)
         self.client.on_connect = on_connect  # Define callback function for successful connection
         self.client.on_message = on_message  # Define callback function for receipt of a message
         self.client.connect(self.mqtt_host, self.mqtt_port)
         self.client.loop_forever()  # Start networking daemon
-    def watch_temp(self):
+    def on_message(self):
+        msg = str(message.payload.decode("utf-8"))
+        if "HI=" in msg:
+            hi = msg.split("=")[2]
+            hi =  hi.strip(" '")
+            #button12.delete("1.0","end")
+            buttonTxt = "Heat Index = {}".format(hi)
+            print(buttonTxt)
+            button12=Button(text=buttonTxt)
+            #button12.update()
+
 
 
 
