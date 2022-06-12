@@ -20,11 +20,12 @@ influxURL: "http://localhost"
 inverterEnable_out: 4
 medHumidity: 35
 medTemp: 83
-mqtt_host: 127.0.0.1
-mqtt_user: "dale"
+mqtt_host: 10.8.0.3
+#mqtt_user: "dale"
 mqtt_password: "paleale"
 mqtt_feed: "/feeds/stats/"
-mqtt_port: "1883"
+mqtt_port: 1883
+mqtt_username: "dale"
 ptt_out: 27
 radioCharger1_out: 20
 radioCharger2_out: 21
