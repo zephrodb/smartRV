@@ -6,7 +6,7 @@ from turtle import up
 import yaml
 #import adafruit_dht
 import RPi.GPIO as GPIO
-import smbus
+from smbus2 import SMBus
 import sys
 import time
 from espeakng import ESpeakNG
@@ -15,6 +15,7 @@ from espeakng import ESpeakNG
 import paho.mqtt.client as mqtt
 import threading
 from tkinter import *
+import tkinter.font as font
 
 
 class environmentThresholds:
@@ -34,10 +35,11 @@ class setupPins:
 
 class setupRelays:
     def __init__(self, ptt_out, gen1Start_out, chargerEnable_out, inverterEnable_out, relayHatBus, relayHatAddress, radioCharger_out):
-        smbus.SMBus(relayHatBus).write_byte_data(relayHatAddress, ptt_out, 0x00)
-        relayHatBus.write_byte_data(relayHatAddress, gen1Start_out, 0x00)    
-        relayHatBus.write_byte_data(relayHatAddress, chargerEnable_out, 0x00)
-        relayHatBus.write_byte_data(relayHatAddress, inverterEnable_out, 0x00)
+        with SMBus(1) as bus:
+            bus.write_byte_data(relayHatAddress, ptt_out, 0x00)
+            bus.write_byte_data(relayHatAddress, gen1Start_out, 0x00)    
+            bus.write_byte_data(relayHatAddress, chargerEnable_out, 0x00)
+            bus.write_byte_data(relayHatAddress, inverterEnable_out, 0x00)
         ## always start charging on startup. we can turn it off later.
         GPIO.output(radioCharger_out, GPIO.LOW)
         GPIO.output(radioCharger_out, GPIO.LOW)
@@ -105,7 +107,7 @@ class powerControl:
         self.RelayChargerEnableGPIO = chargerEnable_out
         self.relayHatBus = relayHatBus
         self.relayHatAddress = relayHatAddress
-
+        self.buttonFont = font.Font(family='Helvetica', size=24)
 
     def checkGen1Status(self):
         #TODO need to add logic to actually check status
@@ -150,6 +152,29 @@ class powerControl:
             msg = "Unable to stop generator, it is not running"
             logging.info(msg + " " + self.Name)
             return msg
+    def inverter_toggle(self):
+        
+        #self.inverterStatus = inverterStatus
+        #self.button8=Button(window, height = 5, width = 15, bg='#0052cc', fg='#ffffff')
+        print("Toggle Inverter")
+        if self.inverterStatus == 0:
+            print("Current Status = " + str(self.inverterStatus))
+            #turn on inverter
+            self.inverterStatus = 1
+            print("New Status = " + str(self.inverterStatus))
+            SMBus(1).write_byte_data(0x10, 4, 0xFF)
+            self.button8.configure(bg='green')
+            inverterStatus = self.inverterStatus            
+
+        elif self.inverterStatus == 1:
+            print("Current Status = " + str(self.inverterStatus))
+            #turn of inverter
+            self.inverterStatus = 0
+            print("New Status = " + str(self.inverterStatus))
+            SMBus(1).write_byte_data(0x10, 4, 0x00)
+            self.button8.configure(bg='#0052cc', fg='#ffffff',)
+            inverterStatus = self.inverterStatus
+
 
 class mqtt_sub:
     def __init__(self, mqtt_feed, mqtt_host, mqtt_password, mqtt_port, mqtt_username):
@@ -158,6 +183,8 @@ class mqtt_sub:
         self.mqtt_password = mqtt_password
         self.mqtt_port = mqtt_port
         self.mqtt_username = mqtt_username
+        self.buttonFont = font.Font(family='Helvetica', size=24)
+        self.button12=Button(height = 5, width = 15, bg='#0052cc', fg='#ffffff', font=self.buttonFont)
         
     def connect(self):
         self.client = mqtt.Client("rosebud_mqtt")  
@@ -189,16 +216,35 @@ class mqtt_sub:
             elif "HI" in payld:
                 hi = payld.split("=")[2]   
                 hi = hi.strip(" '")
-
                 hi = str(hi)
-                # print(hi)
-                self.button12=Button(window, text="Heat Index = " +hi, height = 5, width = 15)
-                self.button12.grid(row=4,column=0)
-                gui.updateHI(self, hi)
+                f_hi = float(hi)
+                i_hi = int(f_hi)
+                print(hi)
+                print(i_hi)
+                print(f_hi)
+                self.button12Txt = "Heat Index = " +hi
+                print(self.button12Txt)
+
+                if i_hi > 89 :
+                    print("temp hi")
+                    self.button12=Button(height = 5, width = 15, bg='red', fg='#ffffff', font=self.buttonFont)
+                    self.button12['text'] = self.button12Txt
+                    self.button12.grid(row=4,column=0)
+
+                elif i_hi <= 90 :
+                    print("temp normal")
+                    self.button12=Button(height = 5, width = 15, bg='#0052cc', fg='#ffffff', font=self.buttonFont)
+                    self.button12['text'] = self.button12Txt
+                    self.button12.grid(row=4,column=0)
+
+
+            
+                
 
 window = Tk()
-window.geometry('800x600')
+#window.geometry('1280x1024')
 window.title("Glass Control Panel")
+window.attributes('-fullscreen',True)
 T = Text(window, height = 1, width = 17)
     
 
@@ -207,8 +253,9 @@ class gui:
         mqtt_thread = threading.Thread(target=mqtt_sub.connect(mqtt_))
         mqtt_thread.start()
         mqtt_thread.join()
-        
+        self.buttonFont = font.Font(family='Helvetica', size=24) 
         self.hi = hi
+        self.inverterStatus = inverterStatus
         self.setTemp = setTemp
         self.buttonDown0 = 0
         self.buttonDown1 = 0
@@ -226,59 +273,72 @@ class gui:
         self.buttonDown13 = 0
 
         self.button0=Button(window, text="RV Enable",
-        command=self.rvEnable, height = 5, width = 15)
-        self.button0.grid(row=1,column=0)
+        command=self.rvEnable, height = 5, width = 15, bg='#0052cc', fg='#ffffff', font=self.buttonFont)
+        self.button0.grid(row=1,column=0, pady=12, padx=11)
 
         self.button1=Button(window, text="Kitchen Light",
-        command=self.kitchenLight, height = 5, width = 15)
-        self.button1.grid(row=1,column=1)
+        command=self.kitchenLight, height = 5, width = 15, bg='#0052cc', fg='#ffffff', font=self.buttonFont)
+        self.button1.grid(row=1,column=1, pady=12, padx=11)
 
         self.button2=Button(window, text="Generator Start",
-        command=self.genStart, height = 5, width = 15)
-        self.button2.grid(row=1,column=2)
+        command=self.genStart, height = 5, width = 15, bg='#0052cc', fg='#ffffff', font=self.buttonFont)
+        self.button2.grid(row=1,column=2, pady=12, padx=11)
 
         self.button3=Button(window, text="Exterior Lights",
-        command=self.outsideLights, height = 5, width = 15)
-        self.button3.grid(row=1,column=3)
+        command=self.outsideLights, height = 5, width = 15, bg='#0052cc', fg='#ffffff', font=self.buttonFont)
+        self.button3.grid(row=1,column=3, pady=12, padx=11)
 
         self.button4=Button(window, text="Water Heater",
-        command=self.waterHeater, height = 5, width = 15)
-        self.button4.grid(row=2,column=0)
+        command=self.waterHeater, height = 5, width = 15, bg='#0052cc', fg='#ffffff', font=self.buttonFont)
+        self.button4.grid(row=2,column=0, pady=12, padx=11)
 
         self.button5=Button(window, text="Water Pump",
-        command=self.waterPump, height = 5, width = 15)
-        self.button5.grid(row=2,column=1)
+        command=self.waterPump, height = 5, width = 15, bg='#0052cc', fg='#ffffff', font=self.buttonFont)
+        self.button5.grid(row=2,column=1, pady=12, padx=11)
 
         self.button6=Button(window, text="Step",
-        command=self.step, height = 5, width = 15)
-        self.button6.grid(row=2,column=2)
+        command=self.step, height = 5, width = 15, bg='#0052cc', fg='#ffffff', font=self.buttonFont)
+        self.button6.grid(row=2,column=2, pady=12, padx=11)
 
         self.button7=Button(window, text="Porch Light",
-        command=self.porchLight, height = 5, width = 15)
-        self.button7.grid(row=2,column=3)
+        command=self.porchLight, height = 5, width = 15, bg='#0052cc', fg='#ffffff', font=self.buttonFont)
+        self.button7.grid(row=2,column=3, pady=12, padx=11)
 
         self.button8=Button(window, text="Inverter",
-        command=self.inverter, height = 5, width = 15)
-        self.button8.grid(row=3,column=0)
+        command=self.inverter, height = 5, width = 15, bg='#0052cc', fg='#ffffff', font=self.buttonFont)
+        self.button8.grid(row=3,column=0, pady=12, padx=11)
 
         self.button9=Button(window, text="A/C Start",
-        command=self.acStart, height = 5, width = 15)
-        self.button9.grid(row=4,column=1)
+        command=self.acStart, height = 5, width = 15, bg='#0052cc', fg='#ffffff', font=self.buttonFont)
+        self.button9.grid(row=4,column=1, pady=12, padx=11)
 
         self.button10=Button(window, text="Temp Down",
-        command=self.acDown, height = 5, width = 15)
-        self.button10.grid(row=4,column=2)
+        command=self.acDown, height = 5, width = 15, bg='#0052cc', fg='#ffffff', font=self.buttonFont)
+        self.button10.grid(row=4,column=2, pady=12, padx=11)
 
         self.button11=Button(window, text="Temp Up",
-        command=self.acUp, height = 5, width = 15)
-        self.button11.grid(row=4,column=3)
+        command=self.acUp, height = 5, width = 15, bg='#0052cc', fg='#ffffff', font=self.buttonFont)
+        self.button11.grid(row=4,column=3, pady=12, padx=11)
 
-        self.button12=Button(window, text="Heat Index = " +hi, height = 5, width = 15)
-        self.button12.grid(row=4,column=0)
+        self.button12=Button(window, text="Heat Index = " +hi, height = 5, width = 15, bg='#0052cc', fg='#ffffff', font=self.buttonFont)
+        self.button12.grid(row=4,column=0, pady=12, padx=11)
+        
+        s_setTemp = str(setTemp)
+        button13Txt = "AC Set Temp = " +s_setTemp
+        self.button13=Button(window, text=button13Txt,  height = 5, width = 15, bg='#0052cc', fg='#ffffff', font=self.buttonFont)
+        self.button13.grid(row=3,column=3, pady=12, padx=11)
 
-        self.button13=Button(window, text=setTemp, height = 5, width = 15)
-        self.button13.grid(row=3,column=3)
+        self.button14=Button(window, text="", height = 5, width = 15, bg='#0052cc', fg='#ffffff', font=self.buttonFont)
+        self.button14.grid(row=5,column=0, pady=12, padx=11)
 
+        self.button15=Button(window, text="", height = 5, width = 15, bg='#0052cc', fg='#ffffff', font=self.buttonFont)
+        self.button15.grid(row=5,column=1, pady=12, padx=11)
+
+        self.button16=Button(window, text="", height = 5, width = 15, bg='#0052cc', fg='#ffffff', font=self.buttonFont)
+        self.button16.grid(row=5,column=2, pady=12, padx=11)        
+
+        self.button17=Button(window, text="", height = 5, width = 15, bg='#0052cc', fg='#ffffff', font=self.buttonFont)
+        self.button17.grid(row=5,column=3, pady=12, padx=11)     
 
         window.mainloop()
 
@@ -287,88 +347,90 @@ class gui:
             self.buttonDown0 = 1
             self.button0.configure(bg='green')
         elif self.buttonDown0 == 1 :
-            self.button0.configure(bg='#D9D8D7')
+            self.button0.configure(bg='#0052cc', fg='#ffffff')
             self.buttonDown0 = 0
     def kitchenLight(self):
         if self.buttonDown1 == 0 :
             self.buttonDown1 = 1
             self.button1.configure(bg='green')
         elif self.buttonDown1 == 1 :
-            self.button1.configure(bg='#D9D8D7')
+            self.button1.configure(bg='#0052cc', fg='#ffffff')
             self.buttonDown1 = 0
     def genStart(self):
         if self.buttonDown2 == 0 :
             self.buttonDown2 = 1
             self.button2.configure(bg='green')
         elif self.buttonDown2 == 1 :
-            self.button2.configure(bg='#D9D8D7')
+            self.button2.configure(bg='#0052cc', fg='#ffffff')
             self.buttonDown2 = 0
     def outsideLights(self):
         if self.buttonDown3 == 0 :
             self.buttonDown3 = 1
             self.button3.configure(bg='green')
         elif self.buttonDown3 == 1 :
-            self.button3.configure(bg='#D9D8D7')
+            self.button3.configure(bg='#0052cc', fg='#ffffff')
             self.buttonDown3 = 0
     def waterHeater(self):
         if self.buttonDown4 == 0 :
             self.buttonDown4 = 1
             self.button4.configure(bg='green')
         elif self.buttonDown4 == 1 :
-            self.button4.configure(bg='#D9D8D7')
+            self.button4.configure(bg='#0052cc', fg='#ffffff')
             self.buttonDown4 = 0
     def waterPump(self):
         if self.buttonDown5 == 0 :
             self.buttonDown5 = 1
             self.button5.configure(bg='green')
         elif self.buttonDown5 == 1 :
-            self.button5.configure(bg='#D9D8D7')
+            self.button5.configure(bg='#0052cc', fg='#ffffff')
             self.buttonDown5 = 0
     def step(self):
         if self.buttonDown6 == 0 :
             self.buttonDown6 = 1
             self.button6.configure(bg='green')
         elif self.buttonDown6 == 1 :
-            self.button6.configure(bg='#D9D8D7')
+            self.button6.configure(bg='#0052cc', fg='#ffffff')
             self.buttonDown6 = 0
     def porchLight(self):
         if self.buttonDown7 == 0 :
             self.buttonDown7 = 1
             self.button7.configure(bg='green')
         elif self.buttonDown7 == 1 :
-            self.button7.configure(bg='#D9D8D7')
+            self.button7.configure(bg='#0052cc', fg='#ffffff')
             self.buttonDown7 = 0
     def inverter(self):
-        if self.buttonDown8 == 0 :
-            self.buttonDown8 = 1
-            self.button8.configure(bg='green')
-        elif self.buttonDown8 == 1 :
-            self.button8.configure(bg='#D9D8D7')
-            self.buttonDown8 = 0
+        powerControl.inverter_toggle(self)
     def acStart(self):
         if self.buttonDown9 == 0 :
             self.buttonDown9 = 1
             self.button9.configure(bg='green')
         elif self.buttonDown9 == 1 :
-            self.button9.configure(bg='#D9D8D7')
+            self.button9.configure(bg='#0052cc', fg='#ffffff')
             self.buttonDown9 = 0
     def acDown(self):
         self.setTemp -= 1
-        self.button13['text'] = self.setTemp
-        #self.button13=Button(self.window, text=self.setTemp, height = 5, width = 15)
+        self.s_setTemp = str(self.setTemp)
+        self.button13Txt = "AC Set Temp = " +self.s_setTemp
+        self.button13['text'] = self.button13Txt
     def acUp(self):
         self.setTemp += 1
-        self.button13['text'] = self.setTemp
+        self.s_setTemp = str(self.setTemp)
+        self.button13Txt = "AC Set Temp = " +self.s_setTemp
+        self.button13['text'] = self.button13Txt
     def updateHI(self, hi):
         i_hi = float(hi)
         i_hi = int(i_hi)
+        self.button12Txt = "Heat Index = " +str(hi)
+        print(self.button12Txt)
         if i_hi >> 89 :
-            self.button12['text'] = "Heat Index = " +hi
             self.button12['bg'] ='red'
-        elif i_hi <= 90 :
-            self.button12['text'] = "Heat Index = " +hi
-            self.button12['bg'] ='green'
+            #self.button12['font'] = self.buttonFont
+            self.button12['text'] = self.button12Txt
 
+        elif i_hi <= 90 :
+            self.button12['bg'] ='green'
+            #self.button12['font'] = self.buttonFont
+            self.button12['text'] = self.button12Txt
 
 if __name__ == "__main__":
     
@@ -412,7 +474,8 @@ if __name__ == "__main__":
                                 configParams['chargerEnable_out'],
                                 configParams['relayHatBus'],
                                 configParams['relayHatAddress'])
-        inverter = powerControl(configParams['gen1Name'],
+        inverter = powerControl(configParams['inverterStatus'],
+                                configParams['gen1Name'],
                                  configParams['gen1Start_out'],
                                  configParams['gen1Run_in'],
                                  configParams['gen1Stop_out'],
@@ -453,6 +516,8 @@ if __name__ == "__main__":
     #         print()
     #         i += 1
     #     radio.sendCallsign(rad)
+
+    inverterStatus = 0
     hi = "0"
     setTemp = 82
     gui(window, hi, setTemp)
@@ -463,7 +528,3 @@ if __name__ == "__main__":
     gui_thread.start()
     gui_thread.join()
     mqtt_thread.join()
-
-    
-
-    
