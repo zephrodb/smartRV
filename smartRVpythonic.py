@@ -1,22 +1,20 @@
 #!/usr/bin/python3
-#from email import message
 import logging
 from os import system
 from turtle import up
+from unittest import result
 import yaml
-#import adafruit_dht
 import RPi.GPIO as GPIO
 from smbus2 import SMBus
 import sys
 import time
 from espeakng import ESpeakNG
-#import random 
-#import argparse
 import paho.mqtt.client as mqtt
 import threading
 from tkinter import *
 import tkinter.font as font
-
+from Adafruit_I2C import Adafruit_I2C
+from MCP23017 import MCP23017
 
 class environmentThresholds:
     def __init__(self, highHumidity, highTemp, medHumidity, medTemp):
@@ -108,10 +106,16 @@ class powerControl:
         self.relayHatBus = relayHatBus
         self.relayHatAddress = relayHatAddress
         self.buttonFont = font.Font(family='Helvetica', size=24)
+        
+        self.inverterStatus = readIO.readPin(10)
 
     def checkGen1Status(self):
-        #TODO need to add logic to actually check status
-        return self.gen1Run_in
+        if readIO.readPin(10) == 0:
+            return True
+        else:
+            if  readIO.readPin(10) == 1:
+                return False
+        
 
 
     def startGen1(self):
@@ -121,7 +125,7 @@ class powerControl:
             logging.info(msg + " " + self.Name)
             #Run starter for .XX Seconds
             self.relayHatBus.write_byte_data(self.relayHatAddress, self.gen1Start_out, 0xFF)
-            time.sleep(.33)
+            time.sleep(4.33)
             #Stop starter
             self.relayHatBus.write_byte_data(self.relayHatAddress, self.gen1Start_out, 0x00)
             return msg
@@ -153,27 +157,35 @@ class powerControl:
             logging.info(msg + " " + self.Name)
             return msg
     def inverter_toggle(self):
-        
-        #self.inverterStatus = inverterStatus
+        inverterStatus = readIO.readPin(10)
+        print("Current Status = (1=off/0=on) " + str(readIO.readPin(10)))
         #self.button8=Button(window, height = 5, width = 15, bg='#0052cc', fg='#ffffff')
         print("Toggle Inverter")
-        if self.inverterStatus == 0:
-            print("Current Status = " + str(self.inverterStatus))
+        print()
+        if readIO.readPin(10) == 1:
             #turn on inverter
-            self.inverterStatus = 1
-            print("New Status = " + str(self.inverterStatus))
+            print("Geting Turned On")
             SMBus(1).write_byte_data(0x10, 4, 0xFF)
-            self.button8.configure(bg='green')
-            inverterStatus = self.inverterStatus            
-
-        elif self.inverterStatus == 1:
-            print("Current Status = " + str(self.inverterStatus))
-            #turn of inverter
-            self.inverterStatus = 0
-            print("New Status = " + str(self.inverterStatus))
+            time.sleep(3)
+            print("New Status = (1=off/0=on)" + str(readIO.readPin(10))) 
+            if readIO.readPin(10) == 0:           
+                self.button8.configure(bg='green')
+                self.button8['text'] = "Inverter (ON)"
+            else:
+                self.button8.configure(bg='yellow')
+                self.button8['text'] = "Inverter (FAIL?)"
+        elif readIO.readPin(10) == 0:
+            #turn off inverter
+            print("Total Turn Off")
             SMBus(1).write_byte_data(0x10, 4, 0x00)
-            self.button8.configure(bg='#0052cc', fg='#ffffff',)
-            inverterStatus = self.inverterStatus
+            time.sleep(3)            
+            print("New Status = (1=off/0=on)" + str(readIO.readPin(10)))
+            if readIO.readPin(10) == 1:           
+                self.button8.configure(bg='#0052cc', fg='#ffffff',)
+                self.button8['text'] = "Inverter"
+            else: 
+                self.button8.configure(bg='red')
+                self.button8['text'] = "Inverter (Switch?)"
 
 
 class mqtt_sub:
@@ -198,41 +210,34 @@ class mqtt_sub:
         
     def on_connect(self, client, userdata, flags, rc):
         rc = rc
-        print("CONNECTED")
+        print("MQTT Subbed")
         print("Connected with result code: ", str(rc))
 
     
     def on_message(self, client, userdata, msg):
         payld = str(msg.payload)
+        #print(payld)
         if 't_0' in payld:
             if 'temp_F' in payld:
                 temp_f = payld.split("=")[2]
                 temp_f = temp_f.strip(" '")
-                # print(temp_f)
             elif "RH" in payld:
                 rh = payld.split("=")[2]   
                 rh = rh.strip(" '")
-                # print(rh)
             elif "HI" in payld:
                 hi = payld.split("=")[2]   
                 hi = hi.strip(" '")
                 hi = str(hi)
                 f_hi = float(hi)
                 i_hi = int(f_hi)
-                print(hi)
-                print(i_hi)
-                print(f_hi)
                 self.button12Txt = "Heat Index = " +hi
                 print(self.button12Txt)
-
                 if i_hi > 89 :
-                    print("temp hi")
                     self.button12=Button(height = 5, width = 15, bg='red', fg='#ffffff', font=self.buttonFont)
                     self.button12['text'] = self.button12Txt
                     self.button12.grid(row=4,column=0)
 
                 elif i_hi <= 90 :
-                    print("temp normal")
                     self.button12=Button(height = 5, width = 15, bg='#0052cc', fg='#ffffff', font=self.buttonFont)
                     self.button12['text'] = self.button12Txt
                     self.button12.grid(row=4,column=0)
@@ -271,6 +276,30 @@ class gui:
         self.buttonDown11 = 0
         self.buttonDown12 = 0
         self.buttonDown13 = 0
+        inpin7=7
+        mcp.pinMode(inpin7, mcp.OUTPUT)
+        mcp.pullUp(inpin7, 0)
+        inpin6=6
+        mcp.pinMode(inpin6, mcp.OUTPUT)
+        mcp.pullUp(inpin6, 0)
+        inpin5=5
+        mcp.pinMode(inpin5, mcp.OUTPUT)
+        mcp.pullUp(inpin5, 0)                        
+        inpin4=4
+        mcp.pinMode(inpin4, mcp.OUTPUT)
+        mcp.pullUp(inpin4, 0)
+        inpin3=3
+        mcp.pinMode(inpin3, mcp.OUTPUT)
+        mcp.pullUp(inpin3, 0)
+        inpin2=2
+        mcp.pinMode(inpin2, mcp.OUTPUT)
+        mcp.pullUp(inpin2, 0)    
+        inpin1=1
+        mcp.pinMode(inpin1, mcp.OUTPUT)
+        mcp.pullUp(inpin1, 0)   
+        inpin0=0
+        mcp.pinMode(inpin0, mcp.OUTPUT)
+        mcp.pullUp(inpin0, 0)   
 
         self.button0=Button(window, text="RV Enable",
         command=self.rvEnable, height = 5, width = 15, bg='#0052cc', fg='#ffffff', font=self.buttonFont)
@@ -303,10 +332,15 @@ class gui:
         self.button7=Button(window, text="Porch Light",
         command=self.porchLight, height = 5, width = 15, bg='#0052cc', fg='#ffffff', font=self.buttonFont)
         self.button7.grid(row=2,column=3, pady=12, padx=11)
-
-        self.button8=Button(window, text="Inverter",
-        command=self.inverter, height = 5, width = 15, bg='#0052cc', fg='#ffffff', font=self.buttonFont)
-        self.button8.grid(row=3,column=0, pady=12, padx=11)
+        
+        if readIO.readPin(10) == 1:
+            self.button8=Button(window, text="Inverter",
+            command=self.inverter, height = 5, width = 15, bg='#0052cc', fg='#ffffff', font=self.buttonFont)
+            self.button8.grid(row=3,column=0, pady=12, padx=11)
+        else:
+            self.button8=Button(window, text="Inverter (ON)",
+            command=self.inverter, height = 5, width = 15, bg='green', fg='#ffffff', font=self.buttonFont)
+            self.button8.grid(row=3,column=0, pady=12, padx=11)
 
         self.button9=Button(window, text="A/C Start",
         command=self.acStart, height = 5, width = 15, bg='#0052cc', fg='#ffffff', font=self.buttonFont)
@@ -330,9 +364,13 @@ class gui:
 
         self.button14=Button(window, text="", height = 5, width = 15, bg='#0052cc', fg='#ffffff', font=self.buttonFont)
         self.button14.grid(row=5,column=0, pady=12, padx=11)
-
-        self.button15=Button(window, text="", height = 5, width = 15, bg='#0052cc', fg='#ffffff', font=self.buttonFont)
-        self.button15.grid(row=5,column=1, pady=12, padx=11)
+        
+        if readIO.readPin(11) == 0:
+            self.button15=Button(window, text="EXT GEN (ON)", height = 5, width = 15, bg='green', fg='#ffffff', font=self.buttonFont)
+            self.button15.grid(row=5,column=1, pady=12, padx=11)
+        else:
+            self.button15=Button(window, text="EXT GEN", height = 5, width = 15, bg='#0052cc', fg='#ffffff', font=self.buttonFont)
+            self.button15.grid(row=5,column=1, pady=12, padx=11)
 
         self.button16=Button(window, text="", height = 5, width = 15, bg='#0052cc', fg='#ffffff', font=self.buttonFont)
         self.button16.grid(row=5,column=2, pady=12, padx=11)        
@@ -351,9 +389,11 @@ class gui:
             self.buttonDown0 = 0
     def kitchenLight(self):
         if self.buttonDown1 == 0 :
+            mcp.output(0, 1)
             self.buttonDown1 = 1
             self.button1.configure(bg='green')
         elif self.buttonDown1 == 1 :
+            mcp.output(0, 0)
             self.button1.configure(bg='#0052cc', fg='#ffffff')
             self.buttonDown1 = 0
     def genStart(self):
@@ -365,37 +405,47 @@ class gui:
             self.buttonDown2 = 0
     def outsideLights(self):
         if self.buttonDown3 == 0 :
+            mcp.output(1, 1)
             self.buttonDown3 = 1
             self.button3.configure(bg='green')
         elif self.buttonDown3 == 1 :
+            mcp.output(1, 0)
             self.button3.configure(bg='#0052cc', fg='#ffffff')
             self.buttonDown3 = 0
     def waterHeater(self):
         if self.buttonDown4 == 0 :
+            mcp.output(2, 1)
             self.buttonDown4 = 1
             self.button4.configure(bg='green')
         elif self.buttonDown4 == 1 :
+            mcp.output(2, 0)
             self.button4.configure(bg='#0052cc', fg='#ffffff')
             self.buttonDown4 = 0
     def waterPump(self):
         if self.buttonDown5 == 0 :
+            mcp.output(3, 1)
             self.buttonDown5 = 1
             self.button5.configure(bg='green')
         elif self.buttonDown5 == 1 :
+            mcp.output(3, 0)
             self.button5.configure(bg='#0052cc', fg='#ffffff')
             self.buttonDown5 = 0
     def step(self):
         if self.buttonDown6 == 0 :
+            mcp.output(4, 1)
             self.buttonDown6 = 1
             self.button6.configure(bg='green')
         elif self.buttonDown6 == 1 :
+            mcp.output(4, 0)
             self.button6.configure(bg='#0052cc', fg='#ffffff')
             self.buttonDown6 = 0
     def porchLight(self):
         if self.buttonDown7 == 0 :
+            mcp.output(5, 1)
             self.buttonDown7 = 1
             self.button7.configure(bg='green')
         elif self.buttonDown7 == 1 :
+            mcp.output(5, 0)
             self.button7.configure(bg='#0052cc', fg='#ffffff')
             self.buttonDown7 = 0
     def inverter(self):
@@ -424,13 +474,42 @@ class gui:
         print(self.button12Txt)
         if i_hi >> 89 :
             self.button12['bg'] ='red'
-            #self.button12['font'] = self.buttonFont
             self.button12['text'] = self.button12Txt
-
         elif i_hi <= 90 :
             self.button12['bg'] ='green'
-            #self.button12['font'] = self.buttonFont
             self.button12['text'] = self.button12Txt
+
+class readIO:
+    def __init__(self, mcp, pin):
+        self.pin = pin
+        inpin15=15
+        mcp.pinMode(inpin15, mcp.INPUT)
+        mcp.pullUp(inpin15, 0)
+        inpin14=14
+        mcp.pinMode(inpin14, mcp.INPUT)
+        mcp.pullUp(inpin14, 0)
+        inpin13=13
+        mcp.pinMode(inpin13, mcp.INPUT)
+        mcp.pullUp(inpin13, 0)
+        inpin12=12
+        mcp.pinMode(inpin12, mcp.INPUT)
+        mcp.pullUp(inpin12, 0)
+        inpin11=11
+        mcp.pinMode(inpin11, mcp.INPUT)
+        mcp.pullUp(inpin11, 0)
+        inpin10=10
+        mcp.pinMode(inpin10, mcp.INPUT)
+        mcp.pullUp(inpin10, 0)
+        inpin9=9
+        mcp.pinMode(inpin9, mcp.INPUT)
+        mcp.pullUp(inpin9, 0)
+        inpin8=8
+        mcp.pinMode(inpin8, mcp.INPUT)
+        mcp.pullUp(inpin8, 0)                             
+    def readPin(pin):
+        mcp = MCP23017(address = 0x24, num_gpios = 16)
+        ret = mcp.currentVal(pin)
+        return ret
 
 if __name__ == "__main__":
     
@@ -455,7 +534,6 @@ if __name__ == "__main__":
                     configParams['ptt_out'],
                     configParams['radioCharger1_out'],
                     configParams['radioCharger2_out'])
-
         gen1 = powerControl(configParams['gen1Name'],
                                  configParams['gen1Start_out'],
                                  configParams['gen1Run_in'],
@@ -474,7 +552,7 @@ if __name__ == "__main__":
                                 configParams['chargerEnable_out'],
                                 configParams['relayHatBus'],
                                 configParams['relayHatAddress'])
-        inverter = powerControl(configParams['inverterStatus'],
+        inverter = powerControl(configParams['inverterSense'],
                                 configParams['gen1Name'],
                                  configParams['gen1Start_out'],
                                  configParams['gen1Run_in'],
@@ -520,6 +598,12 @@ if __name__ == "__main__":
     inverterStatus = 0
     hi = "0"
     setTemp = 82
+    pin = 0
+
+
+    mcp = MCP23017(address = 0x24, num_gpios = 16) # MCP2301
+
+
     gui(window, hi, setTemp)
 
     mqtt_thread = threading.Thread(target=mqtt_sub.connect(mqtt_))
