@@ -17,6 +17,7 @@ influxBucket: "stats"
 influxToken: "77KunYFbD5eDvQxZzroVc2J2m9ZuXzjjFdM_EY8d156BG9ihIbM6WZ09kDbvr6COn4KFF4cNGSaM2VFtAB9wRQ=="
 influxORG: "TheRosebudExplorer"
 influxURL: "http://localhost"
+inverterSense: 10
 inverterEnable_out: 4
 medHumidity: 35
 medTemp: 83
