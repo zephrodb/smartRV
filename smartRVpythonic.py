@@ -231,7 +231,7 @@ class mqtt_sub:
                 f_hi = float(hi)
                 i_hi = int(f_hi)
                 self.button12Txt = "Heat Index = " +hi
-                print(self.button12Txt)
+                #print(self.button12Txt)
                 if i_hi > 89 :
                     self.button12=Button(height = 5, width = 15, bg='red', fg='#ffffff', font=self.buttonFont)
                     self.button12['text'] = self.button12Txt
@@ -276,30 +276,7 @@ class gui:
         self.buttonDown11 = 0
         self.buttonDown12 = 0
         self.buttonDown13 = 0
-        inpin7=7
-        mcp.pinMode(inpin7, mcp.OUTPUT)
-        mcp.pullUp(inpin7, 0)
-        inpin6=6
-        mcp.pinMode(inpin6, mcp.OUTPUT)
-        mcp.pullUp(inpin6, 0)
-        inpin5=5
-        mcp.pinMode(inpin5, mcp.OUTPUT)
-        mcp.pullUp(inpin5, 0)                        
-        inpin4=4
-        mcp.pinMode(inpin4, mcp.OUTPUT)
-        mcp.pullUp(inpin4, 0)
-        inpin3=3
-        mcp.pinMode(inpin3, mcp.OUTPUT)
-        mcp.pullUp(inpin3, 0)
-        inpin2=2
-        mcp.pinMode(inpin2, mcp.OUTPUT)
-        mcp.pullUp(inpin2, 0)    
-        inpin1=1
-        mcp.pinMode(inpin1, mcp.OUTPUT)
-        mcp.pullUp(inpin1, 0)   
-        inpin0=0
-        mcp.pinMode(inpin0, mcp.OUTPUT)
-        mcp.pullUp(inpin0, 0)   
+        mcp.pinMode(7, mcp.OUTPUT)
 
         self.button0=Button(window, text="RV Enable",
         command=self.rvEnable, height = 5, width = 15, bg='#0052cc', fg='#ffffff', font=self.buttonFont)
@@ -389,11 +366,13 @@ class gui:
             self.buttonDown0 = 0
     def kitchenLight(self):
         if self.buttonDown1 == 0 :
-            mcp.output(0, 1)
+            mcp.pinMode(0, mcp.OUTPUT)
+            mcp.output(0, mcp.LOW)
             self.buttonDown1 = 1
             self.button1.configure(bg='green')
         elif self.buttonDown1 == 1 :
-            mcp.output(0, 0)
+            mcp.pinMode(0, mcp.OUTPUT)
+            mcp.output(0, mcp.HIGH)
             self.button1.configure(bg='#0052cc', fg='#ffffff')
             self.buttonDown1 = 0
     def genStart(self):
@@ -405,47 +384,57 @@ class gui:
             self.buttonDown2 = 0
     def outsideLights(self):
         if self.buttonDown3 == 0 :
-            mcp.output(1, 1)
+            mcp.pinMode(6, mcp.OUTPUT)
+            mcp.output(6, mcp.LOW)
             self.buttonDown3 = 1
             self.button3.configure(bg='green')
         elif self.buttonDown3 == 1 :
-            mcp.output(1, 0)
+            mcp.pinMode(6, mcp.OUTPUT)
+            mcp.output(6, mcp.HIGH)
             self.button3.configure(bg='#0052cc', fg='#ffffff')
             self.buttonDown3 = 0
     def waterHeater(self):
         if self.buttonDown4 == 0 :
-            mcp.output(2, 1)
+            mcp.pinMode(4, mcp.OUTPUT)
+            mcp.output(4, mcp.LOW)
             self.buttonDown4 = 1
             self.button4.configure(bg='green')
         elif self.buttonDown4 == 1 :
-            mcp.output(2, 0)
+            mcp.pinMode(4, mcp.OUTPUT)
+            mcp.output(4, mcp.HIGH)
             self.button4.configure(bg='#0052cc', fg='#ffffff')
             self.buttonDown4 = 0
     def waterPump(self):
         if self.buttonDown5 == 0 :
-            mcp.output(3, 1)
+            mcp.pinMode(5, mcp.OUTPUT)
+            mcp.output(5, mcp.LOW)
             self.buttonDown5 = 1
             self.button5.configure(bg='green')
         elif self.buttonDown5 == 1 :
-            mcp.output(3, 0)
+            mcp.pinMode(5, mcp.OUTPUT)
+            mcp.output(5, mcp.HIGH)
             self.button5.configure(bg='#0052cc', fg='#ffffff')
             self.buttonDown5 = 0
     def step(self):
         if self.buttonDown6 == 0 :
-            mcp.output(4, 1)
+            mcp.pinMode(2, mcp.OUTPUT)
+            mcp.output(2, mcp.LOW)
             self.buttonDown6 = 1
             self.button6.configure(bg='green')
         elif self.buttonDown6 == 1 :
-            mcp.output(4, 0)
+            mcp.pinMode(2, mcp.OUTPUT)            
+            mcp.output(2, mcp.HIGH)
             self.button6.configure(bg='#0052cc', fg='#ffffff')
             self.buttonDown6 = 0
     def porchLight(self):
         if self.buttonDown7 == 0 :
-            mcp.output(5, 1)
+            mcp.pinMode(3, mcp.OUTPUT)            
+            mcp.output(3, mcp.LOW)
             self.buttonDown7 = 1
             self.button7.configure(bg='green')
         elif self.buttonDown7 == 1 :
-            mcp.output(5, 0)
+            mcp.pinMode(3, mcp.LOW)
+            mcp.output(3, mcp.HIGH)
             self.button7.configure(bg='#0052cc', fg='#ffffff')
             self.buttonDown7 = 0
     def inverter(self):
@@ -471,7 +460,7 @@ class gui:
         i_hi = float(hi)
         i_hi = int(i_hi)
         self.button12Txt = "Heat Index = " +str(hi)
-        print(self.button12Txt)
+        #print(self.button12Txt)
         if i_hi >> 89 :
             self.button12['bg'] ='red'
             self.button12['text'] = self.button12Txt
