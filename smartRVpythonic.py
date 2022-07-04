@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+from ast import And
 import logging
 from os import system
 from turtle import up
@@ -10,7 +11,8 @@ from smbus2 import *
 #from smbus import *
 import sys
 import time
-from espeakng import ESpeakNG
+#from espeakng import ESpeakNG
+import espeakng
 import paho.mqtt.client as mqtt
 import threading
 from tkinter import *
@@ -27,10 +29,7 @@ class environmentThresholds:
 class setupPins:
     def __init__(self, temp1_in, ptt_out, radioCharger1_out, radioCharger2_out):
         GPIO.setmode(GPIO.BCM)
-        GPIO.setup(temp1_in, GPIO.IN)
         GPIO.setup(ptt_out, GPIO.OUT)
-        GPIO.setup(radioCharger1_out, GPIO.OUT)
-        GPIO.setup(radioCharger2_out, GPIO.OUT)
 
 
 class setupRelays:
@@ -144,29 +143,29 @@ class powerControl:
                             return msg
         else:
             msg = "Unable to start generator, it is already running"
-            logging.info(msg + " " + self.Name)
+            #logging.info(msg + " " + self.Name)
             return msg
     def stopGen1(self):
-        if self.checkGen1Status(self) == True:
+        if powerControl.checkGen1Status() == True:
             msg = "stopping generator"
-            logging.info(msg + " " + self.Name)
+            #logging.info(msg + " " + self.Name)
             self.relayHatBus.write_byte_data(0x10, 2, 0xFF)
             time.sleep(5)
             self.relayHatBus.write_byte_data(0x10, 2, 0x00)
             return msg
         else:
             msg = "Unable to stop generator, it is not running"
-            logging.info(msg + " " + self.Name)
+            #logging.info(msg + " " + self.Name)
             return msg
     def stopGen2(self):
-        if self.checkGen1Status(self) == True:
+        if self.checkGen1Status() == True:
             msg = "stopping generator"
-            logging.info(msg + " " + self.Name)
+            #logging.info(msg + " " + self.Name)
             #TODO need to add logic to actually stop genny
             return msg
         else:
             msg = "Unable to stop generator, it is not running"
-            logging.info(msg + " " + self.Name)
+            #logging.info(msg + " " + self.Name)
             return msg
     def inverter_toggle(self):
         inverterStatus = readIO.readPin(10)
@@ -199,15 +198,18 @@ class powerControl:
                 self.button8.configure(bg='red')
                 self.button8['text'] = "Inverter (Switch?)"
 class mqtt_sub:
-    def __init__(self, mqtt_feed, mqtt_host, mqtt_password, mqtt_port, mqtt_username):
+    def __init__(self, mqtt_feed, mqtt_host, mqtt_password, mqtt_port, mqtt_username, buttonDown7 ):
         self.mqtt_feed = mqtt_feed
         self.mqtt_host = mqtt_host
         self.mqtt_password = mqtt_password
         self.mqtt_port = mqtt_port
         self.mqtt_username = mqtt_username
         self.buttonFont = font.Font(family='Helvetica', size=24)
-        self.button12=Button(height = 5, width = 15, bg='#0052cc', fg='#ffffff', font=self.buttonFont)
-        
+        self.button12 = Button(height = 5, width = 15, bg='#0052cc', fg='#ffffff', font=self.buttonFont)
+        self.button7 = Button(height = 5, width = 15, bg='#0052cc', fg='#ffffff', font=self.buttonFont)
+        self.buttonDown7 = buttonDown7
+        self.relayHatAddress=1
+        self.relayHatBus=1
     def connect(self):
         self.client = mqtt.Client("rosebud_mqtt")  
         self.client.username_pw_set(self.mqtt_username, self.mqtt_password)
@@ -226,8 +228,41 @@ class mqtt_sub:
     
     def on_message(self, client, userdata, msg):
         payld = str(msg.payload)
-        #print(payld)
-        if 't_0' in payld:
+        currentTime = int(time.time())
+        secondsAgo5 = currentTime -5 
+        if ("ZVEI1: 1E010ED51380E8" in payld) :
+                print("we have lights OUT gentelemen")
+                mcp.pinMode(3, mcp.OUTPUT)            
+                mcp.output(3, mcp.HIGH)
+        if ("ZVEI1: 1E0101D51380E8" in payld) :
+                print("we have lights ON gentelemen")
+                mcp.pinMode(3, mcp.OUTPUT)            
+                mcp.output(3, mcp.LOW)                
+        if ("ZVEI1: 1E020ED51380E8" in payld) :
+                print("Generator Stop/Auto")
+                powerControl.stopGen1(self)             
+        if ("ZVEI1: 1E0201D51380E8" in payld) :
+                print("Generator Start")
+                powerControl.startGen1(self)                 
+        if ("ZVEI1: 1E030ED51380E8" in payld) :
+                print("Get Temp. Need a xmitter first.")
+            
+        if ("ZVEI1: 1E0301D51380E8" in payld) :
+                print("Temp Down")
+                gui.acDown              
+        if ("ZVEI1: 1E0302D51380E8" in payld) :
+                print("Temp Up")
+                gui.acUp               
+        if ("ZVEI1: 1E040ED51380E8" in payld) :
+                print("Step OFF")
+                mcp.pinMode(1, mcp.OUTPUT)
+                mcp.output(1, mcp.HIGH)
+        if ("ZVEI1: 1E0401D51380E8" in payld) :
+                print("Step ON")
+                mcp.pinMode(1, mcp.OUTPUT)
+                mcp.output(1, mcp.LOW)               
+
+        elif 't_0' in payld:
             if 'temp_F' in payld:
                 temp_f = payld.split("=")[2]
                 temp_f = temp_f.strip(" '")
@@ -246,7 +281,6 @@ class mqtt_sub:
                     self.button12=Button(height = 5, width = 15, bg='red', fg='#ffffff', font=self.buttonFont)
                     self.button12['text'] = self.button12Txt
                     self.button12.grid(row=4,column=0)
-
                 elif i_hi <= 90 :
                     self.button12=Button(height = 5, width = 15, bg='#0052cc', fg='#ffffff', font=self.buttonFont)
                     self.button12['text'] = self.button12Txt
@@ -293,10 +327,10 @@ class gui:
 
         if powerControl.checkGen1Status() == False :
             self.button2=Button(window, text="Generator START",
-            command=powerControl.stopGen1, height = 5, width = 15, bg='#0052cc', fg='#ffffff', font=self.buttonFont)
+            command=self.genStart, height = 5, width = 15, bg='#0052cc', fg='#ffffff', font=self.buttonFont)
         elif powerControl.checkGen1Status() == True :
-            self.button2=Button(window, text="Generator ON",
-            command=powerControl.genStart, height = 5, width = 15, bg='green', fg='#ffffff', font=self.buttonFont)
+            self.button2=Button(window, text="STARTING",
+            command=self.genStart, height = 5, width = 15, bg='green', fg='#ffffff', font=self.buttonFont)
         self.button2.grid(row=1,column=2, pady=12, padx=11)
 
         self.button3=Button(window, text="Exterior Lights",
@@ -392,15 +426,15 @@ class gui:
                 self.button2.configure(bg='green')
             elif powerControl.checkGen1Status() == False :
                 self.button2['text'] = "Generator (Start Fail)"
-                self.button2.configure(bg='red')
+                self.button2.configure(bg='yellow')
         if powerControl.checkGen1Status() == True :
-            powerControl.stopGen1(gen1)
+            powerControl.stopGen1(self)
             if powerControl.checkGen1Status() == False :
                 self.button['text'] = "Generator START"
                 self.button2.configure(bg='#0052cc', fg='#ffffff')
             elif powerControl.checkGen1Status() == True :
                 self.button['text'] = "Generator (Stop Fail)"
-                self.button2.configure(bg='#0052cc', fg='#ffffff')
+                self.button2.configure(bg='red', fg='#ffffff')
     def outsideLights(self):
         if self.buttonDown3 == 0 :
             mcp.pinMode(6, mcp.OUTPUT)
@@ -447,12 +481,14 @@ class gui:
             self.buttonDown6 = 0
     def porchLight(self):
         if self.buttonDown7 == 0 :
+            print("This should be 0: " +str(self.buttonDown7))
             mcp.pinMode(3, mcp.OUTPUT)            
             mcp.output(3, mcp.LOW)
             self.buttonDown7 = 1
             self.button7.configure(bg='green')
         elif self.buttonDown7 == 1 :
-            mcp.pinMode(3, mcp.LOW)
+            print("This should be 1: " +str(self.buttonDown7))
+            mcp.pinMode(3, mcp.OUTPUT)
             mcp.output(3, mcp.HIGH)
             self.button7.configure(bg='#0052cc', fg='#ffffff')
             self.buttonDown7 = 0
@@ -573,36 +609,23 @@ if __name__ == "__main__":
                             configParams['mqtt_host'],
                             configParams['mqtt_password'],
                             configParams['mqtt_port'],
-                            configParams['mqtt_username'])            
+                            configParams['mqtt_username'],
+                            buttonDown7 = 0 )            
         
-    setupPins(22, 27, 20, 21)
-    #setupRelays(relays)
-    GPIO.output(20, GPIO.LOW)
-    GPIO.output(21, GPIO.LOW)
-    # make sure we arent dead keying
-    GPIO.output(27, GPIO.HIGH)
-    
-    # while True:
-    #     i=1
-    #     while i < 7 :
-    #         print()
-    #         i += 1
-    #     radio.sendCallsign(rad)
-
+    #setupPins(22, 27, 20, 21)
     inverterStatus = 0
     hi = "0"
     setTemp = 82
     pin = 0
-    
+    c0deTime = 0
+    buttonDown7 = 0
 
     mcp = MCP23017(address = 0x24, num_gpios = 16) # MCP2301
-
-
     gui(window, hi, setTemp)
-
     mqtt_thread = threading.Thread(target=mqtt_sub.connect(mqtt_))
     gui_thread = threading.Thread(target=gui(window, hi, setTemp))    
     mqtt_thread.start()
     gui_thread.start()
     gui_thread.join()
     mqtt_thread.join()
+
