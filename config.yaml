@@ -27,12 +27,13 @@ mqtt_password: "paleale"
 mqtt_feed: "/feeds/stats/"
 mqtt_port: 1883
 mqtt_username: "dale"
+numberOfTries: 1
 ptt_out: 27
 radioCharger1_out: 20
 radioCharger2_out: 21
 relayHatAddress: 0x10
-#relayHatBus: 1
-relayHatBus: "smbus.SMBus(relayHatBus)"
+relayHatBus: 1
+#relayHatBus: "smbus.SMBus(1)"
 shuntSensor1address: 43
 shunt1name: "Coach1"
 shunt2name: "Coach2"

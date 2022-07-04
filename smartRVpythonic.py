@@ -1,21 +1,25 @@
 #!/usr/bin/python3
+from ast import And
 import logging
 from os import system
 from turtle import up
 from unittest import result
+import smbus2
 import yaml
 import RPi.GPIO as GPIO
-from smbus2 import SMBus
+from smbus2 import *
+#from smbus import *
 import sys
 import time
-from espeakng import ESpeakNG
+#from espeakng import ESpeakNG
+import espeakng
 import paho.mqtt.client as mqtt
 import threading
 from tkinter import *
 import tkinter.font as font
 from Adafruit_I2C import Adafruit_I2C
 from MCP23017 import MCP23017
-
+import board
 class environmentThresholds:
     def __init__(self, highHumidity, highTemp, medHumidity, medTemp):
         self.highHumidity = highHumidity
@@ -25,10 +29,7 @@ class environmentThresholds:
 class setupPins:
     def __init__(self, temp1_in, ptt_out, radioCharger1_out, radioCharger2_out):
         GPIO.setmode(GPIO.BCM)
-        GPIO.setup(temp1_in, GPIO.IN)
         GPIO.setup(ptt_out, GPIO.OUT)
-        GPIO.setup(radioCharger1_out, GPIO.OUT)
-        GPIO.setup(radioCharger2_out, GPIO.OUT)
 
 
 class setupRelays:
@@ -88,7 +89,7 @@ class radio:
         radio.sendRadioMessage(self, msg)
 
 class powerControl:
-    def __init__(self, gen1Name, gen2Name, gen1Start_out, gen1Stop_out, gen2Enable_out, inverterEnable_out, chargerEnable_out, relayHatBus, relayHatAddress, gen1Run_in=False, fuelLevel=0,):
+    def __init__(self, gen1Name, gen2Name, gen1Start_out, gen1Stop_out, gen2Enable_out, inverterEnable_out, chargerEnable_out, relayHatBus, relayHatAddress, numberOfTries, gen1Run_in=False, fuelLevel=0,):
         self.gen1Run_in = gen1Run_in
         self.fuelLevel = fuelLevel
         self.gen1Name = gen1Name
@@ -103,58 +104,68 @@ class powerControl:
         self.RelayGen2EnableGPIO = gen2Enable_out
         self.RelayInverterEnableGPIO = inverterEnable_out
         self.RelayChargerEnableGPIO = chargerEnable_out
-        self.relayHatBus = relayHatBus
+        self.relayHatBus = smbus2.SMBus(1)
         self.relayHatAddress = relayHatAddress
         self.buttonFont = font.Font(family='Helvetica', size=24)
-        
         self.inverterStatus = readIO.readPin(10)
-
-    def checkGen1Status(self):
-        if readIO.readPin(10) == 0:
+        self.numOfTries = numberOfTries
+    def checkGen1Status():
+        if readIO.readPin(8) == 0:
             return True
         else:
-            if  readIO.readPin(10) == 1:
+            if readIO.readPin(8) == 1:
                 return False
-        
-
-
     def startGen1(self):
-        numOfTries = 0
-        if self.checkGen1Status() == False & numOfTries < 3:
-            msg = "starting generator"
-            logging.info(msg + " " + self.Name)
+        if powerControl.checkGen1Status() == False :
+            #logging.info(msg + " " + self.Name)
             #Run starter for .XX Seconds
-            self.relayHatBus.write_byte_data(self.relayHatAddress, self.gen1Start_out, 0xFF)
-            time.sleep(4.33)
+            self.relayHatBus.write_byte_data(0x10, 3, 0xFF)
+            time.sleep(4)
             #Stop starter
-            self.relayHatBus.write_byte_data(self.relayHatAddress, self.gen1Start_out, 0x00)
-            return msg
+            self.relayHatBus.write_byte_data(0x10, 3, 0x00)
+            i = 1
+            while i < 25 : 
+                if powerControl.checkGen1Status() == False :
+                    time.sleep(1)
+                    i += 1
+                    print(i)
+                else :
+                    if powerControl.checkGen1Status() == True :
+                        msg = "started generator"
+                        return msg
+                    else :
+                        if powerControl.checkGen1Status() == False & self.numOfTries <= 3:
+                            self.numOfTries += 1
+                            powerControl.startGen1(self)
+                            msg = "failed to started generator"
+                            print(msg)
+                            print("Number of Tries = " + self.numOfTries)
+                            return msg
         else:
             msg = "Unable to start generator, it is already running"
-            logging.info(msg + " " + self.Name)
+            #logging.info(msg + " " + self.Name)
             return msg
-
     def stopGen1(self):
-        if self.checkGen1Status() == True:
+        if powerControl.checkGen1Status() == True:
             msg = "stopping generator"
-            logging.info(msg + " " + self.Name)
-            self.relayHatBus.write_byte_data(self.relayHatAddress, self.gen1Stop_out, 0xFF)
+            #logging.info(msg + " " + self.Name)
+            self.relayHatBus.write_byte_data(0x10, 2, 0xFF)
             time.sleep(5)
-            self.relayHatBus.write_byte_data(self.relayHatAddress, self.gen1Stop_out, 0x00)
+            self.relayHatBus.write_byte_data(0x10, 2, 0x00)
             return msg
         else:
             msg = "Unable to stop generator, it is not running"
-            logging.info(msg + " " + self.Name)
+            #logging.info(msg + " " + self.Name)
             return msg
     def stopGen2(self):
         if self.checkGen1Status() == True:
             msg = "stopping generator"
-            logging.info(msg + " " + self.Name)
+            #logging.info(msg + " " + self.Name)
             #TODO need to add logic to actually stop genny
             return msg
         else:
             msg = "Unable to stop generator, it is not running"
-            logging.info(msg + " " + self.Name)
+            #logging.info(msg + " " + self.Name)
             return msg
     def inverter_toggle(self):
         inverterStatus = readIO.readPin(10)
@@ -166,7 +177,7 @@ class powerControl:
             #turn on inverter
             print("Geting Turned On")
             SMBus(1).write_byte_data(0x10, 4, 0xFF)
-            time.sleep(3)
+            time.sleep(4)
             print("New Status = (1=off/0=on)" + str(readIO.readPin(10))) 
             if readIO.readPin(10) == 0:           
                 self.button8.configure(bg='green')
@@ -186,18 +197,19 @@ class powerControl:
             else: 
                 self.button8.configure(bg='red')
                 self.button8['text'] = "Inverter (Switch?)"
-
-
 class mqtt_sub:
-    def __init__(self, mqtt_feed, mqtt_host, mqtt_password, mqtt_port, mqtt_username):
+    def __init__(self, mqtt_feed, mqtt_host, mqtt_password, mqtt_port, mqtt_username, buttonDown7 ):
         self.mqtt_feed = mqtt_feed
         self.mqtt_host = mqtt_host
         self.mqtt_password = mqtt_password
         self.mqtt_port = mqtt_port
         self.mqtt_username = mqtt_username
         self.buttonFont = font.Font(family='Helvetica', size=24)
-        self.button12=Button(height = 5, width = 15, bg='#0052cc', fg='#ffffff', font=self.buttonFont)
-        
+        self.button12 = Button(height = 5, width = 15, bg='#0052cc', fg='#ffffff', font=self.buttonFont)
+        self.button7 = Button(height = 5, width = 15, bg='#0052cc', fg='#ffffff', font=self.buttonFont)
+        self.buttonDown7 = buttonDown7
+        self.relayHatAddress=1
+        self.relayHatBus=1
     def connect(self):
         self.client = mqtt.Client("rosebud_mqtt")  
         self.client.username_pw_set(self.mqtt_username, self.mqtt_password)
@@ -216,8 +228,41 @@ class mqtt_sub:
     
     def on_message(self, client, userdata, msg):
         payld = str(msg.payload)
-        #print(payld)
-        if 't_0' in payld:
+        currentTime = int(time.time())
+        secondsAgo5 = currentTime -5 
+        if ("ZVEI1: 1E010ED51380E8" in payld) :
+                print("we have lights OUT gentelemen")
+                mcp.pinMode(3, mcp.OUTPUT)            
+                mcp.output(3, mcp.HIGH)
+        if ("ZVEI1: 1E0101D51380E8" in payld) :
+                print("we have lights ON gentelemen")
+                mcp.pinMode(3, mcp.OUTPUT)            
+                mcp.output(3, mcp.LOW)                
+        if ("ZVEI1: 1E020ED51380E8" in payld) :
+                print("Generator Stop/Auto")
+                powerControl.stopGen1(self)             
+        if ("ZVEI1: 1E0201D51380E8" in payld) :
+                print("Generator Start")
+                powerControl.startGen1(self)                 
+        if ("ZVEI1: 1E030ED51380E8" in payld) :
+                print("Get Temp. Need a xmitter first.")
+            
+        if ("ZVEI1: 1E0301D51380E8" in payld) :
+                print("Temp Down")
+                gui.acDown              
+        if ("ZVEI1: 1E0302D51380E8" in payld) :
+                print("Temp Up")
+                gui.acUp               
+        if ("ZVEI1: 1E040ED51380E8" in payld) :
+                print("Step OFF")
+                mcp.pinMode(1, mcp.OUTPUT)
+                mcp.output(1, mcp.HIGH)
+        if ("ZVEI1: 1E0401D51380E8" in payld) :
+                print("Step ON")
+                mcp.pinMode(1, mcp.OUTPUT)
+                mcp.output(1, mcp.LOW)               
+
+        elif 't_0' in payld:
             if 'temp_F' in payld:
                 temp_f = payld.split("=")[2]
                 temp_f = temp_f.strip(" '")
@@ -236,15 +281,10 @@ class mqtt_sub:
                     self.button12=Button(height = 5, width = 15, bg='red', fg='#ffffff', font=self.buttonFont)
                     self.button12['text'] = self.button12Txt
                     self.button12.grid(row=4,column=0)
-
                 elif i_hi <= 90 :
                     self.button12=Button(height = 5, width = 15, bg='#0052cc', fg='#ffffff', font=self.buttonFont)
                     self.button12['text'] = self.button12Txt
                     self.button12.grid(row=4,column=0)
-
-
-            
-                
 
 window = Tk()
 #window.geometry('1280x1024')
@@ -252,7 +292,6 @@ window.title("Glass Control Panel")
 window.attributes('-fullscreen',True)
 T = Text(window, height = 1, width = 17)
     
-
 class gui:
     def __init__(self, window, hi, setTemp): 
         mqtt_thread = threading.Thread(target=mqtt_sub.connect(mqtt_))
@@ -286,8 +325,12 @@ class gui:
         command=self.kitchenLight, height = 5, width = 15, bg='#0052cc', fg='#ffffff', font=self.buttonFont)
         self.button1.grid(row=1,column=1, pady=12, padx=11)
 
-        self.button2=Button(window, text="Generator Start",
-        command=self.genStart, height = 5, width = 15, bg='#0052cc', fg='#ffffff', font=self.buttonFont)
+        if powerControl.checkGen1Status() == False :
+            self.button2=Button(window, text="Generator START",
+            command=self.genStart, height = 5, width = 15, bg='#0052cc', fg='#ffffff', font=self.buttonFont)
+        elif powerControl.checkGen1Status() == True :
+            self.button2=Button(window, text="STARTING",
+            command=self.genStart, height = 5, width = 15, bg='green', fg='#ffffff', font=self.buttonFont)
         self.button2.grid(row=1,column=2, pady=12, padx=11)
 
         self.button3=Button(window, text="Exterior Lights",
@@ -376,12 +419,22 @@ class gui:
             self.button1.configure(bg='#0052cc', fg='#ffffff')
             self.buttonDown1 = 0
     def genStart(self):
-        if self.buttonDown2 == 0 :
-            self.buttonDown2 = 1
-            self.button2.configure(bg='green')
-        elif self.buttonDown2 == 1 :
-            self.button2.configure(bg='#0052cc', fg='#ffffff')
-            self.buttonDown2 = 0
+        if powerControl.checkGen1Status() == False :
+            powerControl.startGen1(gen1)
+            if powerControl.checkGen1Status() == True :
+                self.button2['text'] = "Generator (ON)"
+                self.button2.configure(bg='green')
+            elif powerControl.checkGen1Status() == False :
+                self.button2['text'] = "Generator (Start Fail)"
+                self.button2.configure(bg='yellow')
+        if powerControl.checkGen1Status() == True :
+            powerControl.stopGen1(self)
+            if powerControl.checkGen1Status() == False :
+                self.button['text'] = "Generator START"
+                self.button2.configure(bg='#0052cc', fg='#ffffff')
+            elif powerControl.checkGen1Status() == True :
+                self.button['text'] = "Generator (Stop Fail)"
+                self.button2.configure(bg='red', fg='#ffffff')
     def outsideLights(self):
         if self.buttonDown3 == 0 :
             mcp.pinMode(6, mcp.OUTPUT)
@@ -417,23 +470,25 @@ class gui:
             self.buttonDown5 = 0
     def step(self):
         if self.buttonDown6 == 0 :
-            mcp.pinMode(2, mcp.OUTPUT)
-            mcp.output(2, mcp.LOW)
+            mcp.pinMode(1, mcp.OUTPUT)
+            mcp.output(1, mcp.LOW)
             self.buttonDown6 = 1
             self.button6.configure(bg='green')
         elif self.buttonDown6 == 1 :
-            mcp.pinMode(2, mcp.OUTPUT)            
-            mcp.output(2, mcp.HIGH)
+            mcp.pinMode(1, mcp.OUTPUT)            
+            mcp.output(1, mcp.HIGH)
             self.button6.configure(bg='#0052cc', fg='#ffffff')
             self.buttonDown6 = 0
     def porchLight(self):
         if self.buttonDown7 == 0 :
+            print("This should be 0: " +str(self.buttonDown7))
             mcp.pinMode(3, mcp.OUTPUT)            
             mcp.output(3, mcp.LOW)
             self.buttonDown7 = 1
             self.button7.configure(bg='green')
         elif self.buttonDown7 == 1 :
-            mcp.pinMode(3, mcp.LOW)
+            print("This should be 1: " +str(self.buttonDown7))
+            mcp.pinMode(3, mcp.OUTPUT)
             mcp.output(3, mcp.HIGH)
             self.button7.configure(bg='#0052cc', fg='#ffffff')
             self.buttonDown7 = 0
@@ -471,30 +526,12 @@ class gui:
 class readIO:
     def __init__(self, mcp, pin):
         self.pin = pin
-        inpin15=15
-        mcp.pinMode(inpin15, mcp.INPUT)
-        mcp.pullUp(inpin15, 0)
-        inpin14=14
-        mcp.pinMode(inpin14, mcp.INPUT)
-        mcp.pullUp(inpin14, 0)
-        inpin13=13
-        mcp.pinMode(inpin13, mcp.INPUT)
-        mcp.pullUp(inpin13, 0)
-        inpin12=12
-        mcp.pinMode(inpin12, mcp.INPUT)
-        mcp.pullUp(inpin12, 0)
-        inpin11=11
-        mcp.pinMode(inpin11, mcp.INPUT)
-        mcp.pullUp(inpin11, 0)
-        inpin10=10
-        mcp.pinMode(inpin10, mcp.INPUT)
-        mcp.pullUp(inpin10, 0)
-        inpin9=9
-        mcp.pinMode(inpin9, mcp.INPUT)
-        mcp.pullUp(inpin9, 0)
-        inpin8=8
-        mcp.pinMode(inpin8, mcp.INPUT)
-        mcp.pullUp(inpin8, 0)                             
+        i = 8
+        while i <=15 :
+            mcp.pinMode(i, mcp.INPUT)
+            mcp.pullUp(i, 0)      
+            i += 1       
+                      
     def readPin(pin):
         mcp = MCP23017(address = 0x24, num_gpios = 16)
         ret = mcp.currentVal(pin)
@@ -531,7 +568,8 @@ if __name__ == "__main__":
                                 configParams['gen2Enable_out'],
                                 configParams['chargerEnable_out'],
                                 configParams['relayHatBus'],
-                                configParams['relayHatAddress'])
+                                configParams['relayHatAddress'],
+                                configParams['numberOfTries'])
         gen2 = powerControl(configParams['gen2Name'],
                                  configParams['gen1Start_out'],
                                  configParams['gen1Run_in'],
@@ -540,7 +578,8 @@ if __name__ == "__main__":
                                 configParams['gen2Enable_out'],
                                 configParams['chargerEnable_out'],
                                 configParams['relayHatBus'],
-                                configParams['relayHatAddress'])
+                                configParams['relayHatAddress'],
+                                configParams['numberOfTries'])
         inverter = powerControl(configParams['inverterSense'],
                                 configParams['gen1Name'],
                                  configParams['gen1Start_out'],
@@ -550,7 +589,8 @@ if __name__ == "__main__":
                                 configParams['gen2Enable_out'],
                                 configParams['chargerEnable_out'],
                                 configParams['relayHatBus'],
-                                configParams['relayHatAddress'])
+                                configParams['relayHatAddress'],
+                                configParams['numberOfTries'])
         charger = powerControl(configParams['gen1Name'],
                                  configParams['gen1Start_out'],
                                  configParams['gen1Run_in'],
@@ -559,7 +599,8 @@ if __name__ == "__main__":
                                 configParams['gen2Enable_out'],
                                 configParams['chargerEnable_out'],
                                 configParams['relayHatBus'],
-                                configParams['relayHatAddress'])    
+                                configParams['relayHatAddress'],
+                                configParams['numberOfTries'])    
         pins = setupPins(configParams['temp1_in'],
                         configParams['ptt_out'],
                         configParams['radioCharger1_out'],
@@ -568,33 +609,19 @@ if __name__ == "__main__":
                             configParams['mqtt_host'],
                             configParams['mqtt_password'],
                             configParams['mqtt_port'],
-                            configParams['mqtt_username'])            
+                            configParams['mqtt_username'],
+                            buttonDown7 = 0 )            
         
-    setupPins(22, 27, 20, 21)
-    #setupRelays(relays)
-    GPIO.output(20, GPIO.LOW)
-    GPIO.output(21, GPIO.LOW)
-    # make sure we arent dead keying
-    GPIO.output(27, GPIO.HIGH)
-    
-    # while True:
-    #     i=1
-    #     while i < 7 :
-    #         print()
-    #         i += 1
-    #     radio.sendCallsign(rad)
-
+    #setupPins(22, 27, 20, 21)
     inverterStatus = 0
     hi = "0"
     setTemp = 82
     pin = 0
-
+    c0deTime = 0
+    buttonDown7 = 0
 
     mcp = MCP23017(address = 0x24, num_gpios = 16) # MCP2301
-
-
     gui(window, hi, setTemp)
-
     mqtt_thread = threading.Thread(target=mqtt_sub.connect(mqtt_))
     gui_thread = threading.Thread(target=gui(window, hi, setTemp))    
     mqtt_thread.start()
