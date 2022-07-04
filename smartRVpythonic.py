@@ -4,10 +4,9 @@ import logging
 from os import system
 from turtle import up
 from unittest import result
-import smbus2
+from smbus2 import SMBus
 import yaml
 import RPi.GPIO as GPIO
-from smbus2 import *
 #from smbus import *
 import sys
 import time
@@ -20,6 +19,8 @@ import tkinter.font as font
 from Adafruit_I2C import Adafruit_I2C
 from MCP23017 import MCP23017
 import board
+
+bus = SMBus(1)
 class environmentThresholds:
     def __init__(self, highHumidity, highTemp, medHumidity, medTemp):
         self.highHumidity = highHumidity
@@ -104,11 +105,12 @@ class powerControl:
         self.RelayGen2EnableGPIO = gen2Enable_out
         self.RelayInverterEnableGPIO = inverterEnable_out
         self.RelayChargerEnableGPIO = chargerEnable_out
-        self.relayHatBus = smbus2.SMBus(1)
+        self.relayHatBus = SMBus(1)
         self.relayHatAddress = relayHatAddress
         self.buttonFont = font.Font(family='Helvetica', size=24)
         self.inverterStatus = readIO.readPin(10)
-        self.numOfTries = numberOfTries
+        self.numberOfTries = 0
+        
     def checkGen1Status():
         if readIO.readPin(8) == 0:
             return True
@@ -119,39 +121,38 @@ class powerControl:
         if powerControl.checkGen1Status() == False :
             #logging.info(msg + " " + self.Name)
             #Run starter for .XX Seconds
-            self.relayHatBus.write_byte_data(0x10, 3, 0xFF)
-            time.sleep(4)
-            #Stop starter
-            self.relayHatBus.write_byte_data(0x10, 3, 0x00)
+            print("Running Starter for 5 seconds")
+            bus.write_byte_data(0x10, 3, 0xFF)            
+            time.sleep(5)
+            #Stop starter/system is remote start safe. wont overrun
+            bus.write_byte_data(0x10, 3, 0x00)            
             i = 1
             while i < 25 : 
                 if powerControl.checkGen1Status() == False :
                     time.sleep(1)
                     i += 1
-                    print(i)
+                    print("Waiting for Power " + str(i) + " of 25 seconds")
                 else :
-                    if powerControl.checkGen1Status() == True :
-                        msg = "started generator"
-                        return msg
-                    else :
-                        if powerControl.checkGen1Status() == False & self.numOfTries <= 3:
-                            self.numOfTries += 1
-                            powerControl.startGen1(self)
-                            msg = "failed to started generator"
-                            print(msg)
-                            print("Number of Tries = " + self.numOfTries)
-                            return msg
-        else:
-            msg = "Unable to start generator, it is already running"
-            #logging.info(msg + " " + self.Name)
-            return msg
+                    return
+            if self.numberOfTries <= 2:
+                self.numberOfTries += 1
+                print("Number of Tries = " + str(self.numberOfTries) + " out of 3")
+                powerControl.startGen1(self)
+            else :
+                return
+        else :
+            return
+        # else:
+        #     msg = "Unable to start generator, it is already running"
+        #     #logging.info(msg + " " + self.Name)
+        #     return msg
     def stopGen1(self):
         if powerControl.checkGen1Status() == True:
             msg = "stopping generator"
             #logging.info(msg + " " + self.Name)
-            self.relayHatBus.write_byte_data(0x10, 2, 0xFF)
+            bus.write_byte_data(0x10, 2, 0xFF)
             time.sleep(5)
-            self.relayHatBus.write_byte_data(0x10, 2, 0x00)
+            bus.write_byte_data(0x10, 2, 0x00)
             return msg
         else:
             msg = "Unable to stop generator, it is not running"
@@ -176,7 +177,7 @@ class powerControl:
         if readIO.readPin(10) == 1:
             #turn on inverter
             print("Geting Turned On")
-            SMBus(1).write_byte_data(0x10, 4, 0xFF)
+            bus.write_byte_data(0x10, 4, 0xFF)
             time.sleep(4)
             print("New Status = (1=off/0=on)" + str(readIO.readPin(10))) 
             if readIO.readPin(10) == 0:           
@@ -188,7 +189,7 @@ class powerControl:
         elif readIO.readPin(10) == 0:
             #turn off inverter
             print("Total Turn Off")
-            SMBus(1).write_byte_data(0x10, 4, 0x00)
+            bus.write_byte_data(0x10, 4, 0x00)
             time.sleep(3)            
             print("New Status = (1=off/0=on)" + str(readIO.readPin(10)))
             if readIO.readPin(10) == 1:           
@@ -242,6 +243,7 @@ class mqtt_sub:
                 print("Generator Stop/Auto")
                 powerControl.stopGen1(self)             
         if ("ZVEI1: 1E0201D51380E8" in payld) :
+                self.numberOfTries = 0
                 print("Generator Start")
                 powerControl.startGen1(self)                 
         if ("ZVEI1: 1E030ED51380E8" in payld) :
@@ -612,7 +614,7 @@ if __name__ == "__main__":
                             configParams['mqtt_username'],
                             buttonDown7 = 0 )            
         
-    #setupPins(22, 27, 20, 21)
+    setupPins(22, 27, 20, 21)
     inverterStatus = 0
     hi = "0"
     setTemp = 82
@@ -628,4 +630,3 @@ if __name__ == "__main__":
     gui_thread.start()
     gui_thread.join()
     mqtt_thread.join()
-
