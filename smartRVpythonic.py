@@ -2,6 +2,7 @@
 from ast import And
 import logging
 from os import system
+import tkinter
 from turtle import up
 from unittest import result
 from smbus2 import SMBus
@@ -10,7 +11,6 @@ import RPi.GPIO as GPIO
 #from smbus import *
 import sys
 import time
-#from espeakng import ESpeakNG
 import espeakng
 import paho.mqtt.client as mqtt
 import threading
@@ -19,8 +19,9 @@ import tkinter.font as font
 from Adafruit_I2C import Adafruit_I2C
 from MCP23017 import MCP23017
 import board
-
+import datetime
 bus = SMBus(1)
+
 class environmentThresholds:
     def __init__(self, highHumidity, highTemp, medHumidity, medTemp):
         self.highHumidity = highHumidity
@@ -40,14 +41,9 @@ class setupRelays:
             bus.write_byte_data(relayHatAddress, gen1Start_out, 0x00)    
             bus.write_byte_data(relayHatAddress, chargerEnable_out, 0x00)
             bus.write_byte_data(relayHatAddress, inverterEnable_out, 0x00)
-        ## always start charging on startup. we can turn it off later.
-        GPIO.output(radioCharger_out, GPIO.LOW)
-        GPIO.output(radioCharger_out, GPIO.LOW)
         ## make sure we arent dead keying
         GPIO.output(ptt_out, GPIO.HIGH)
-        ## do we really want to stop the gen on init? not for me...
-        #relayHatBus.write_byte_data(gen1Stop_out, ptt_out, 0x00)
-        #relayHatBus.write_byte_data(gen2Enable_out, ptt_out, 0x00)        
+       
 
 class radio:
     def __init__(self, callSign, DTMFOperStatus, relayHatBus, relayHatAddress, ptt_out, radioCharger1_out, radioCharger2_out):
@@ -58,35 +54,33 @@ class radio:
         self.ptt_out = ptt_out
         self.radioCharger1_out = radioCharger1_out
         self.radioCharger2_out = radioCharger2_out
+        self.esng = espeakng.Speaker()
     def pttDown(self):
-        GPIO.output(self.radioCharger1_out, GPIO.HIGH)
-        GPIO.output(self.radioCharger2_out, GPIO.HIGH)
-        time.sleep(0.1)
+        logging.info("PTT Down")
         GPIO.output(self.ptt_out, GPIO.LOW)
+        time.sleep(.200)
     def pttUp(self):
+        logging.info("PTT UP")
         GPIO.output(self.ptt_out, GPIO.HIGH)
-        time.sleep(0.1)
-        GPIO.output(self.radioCharger1_out, GPIO.LOW)
-        GPIO.output(self.radioCharger2_out, GPIO.LOW)
-    def enableDTMF(self):
-        self.DTMFOperStatus = True
-    #this is a method on the radio object
-    def disableDTMF(self):
-        self.DTMFOperStatus = False
     def sendRadioMessage(self, msg):
-        esng = ESpeakNG(voice='en-us')
-        esng.speed = 120
+        time.sleep(1)
+        cs = " " + self.callSign
+        msg = msg+cs
+        self.esng.voice='en-us'
+        self.esng.speed = 100
         tones = "echo {} | minimodem -t 1200 -f /tmp/temp.wav".format(msg)
         system(tones)
         radio.pttDown(self)
-        time.sleep(.3)
-        esng.say(msg, sync=True)
-        print(msg)
-        time.sleep(1)
+        logging.info("Sending: " + msg)
+        print("Saying " +msg )
+        self.esng.say(msg, wait4prev=True)
+        print("Voice Done, sending TONES")
+        time.sleep(4)
         system("aplay /tmp/temp.wav")
+        time.sleep(.200)
         radio.pttUp(self)
     def sendCallsign(self):
-        msg = "This is an automated reporting station and open repeater Operated by {}".format(self.callSign)
+        msg = "Operated by {}".format(self.callSign)
         radio.sendRadioMessage(self, msg)
 
 class powerControl:
@@ -211,6 +205,9 @@ class mqtt_sub:
         self.buttonDown7 = buttonDown7
         self.relayHatAddress=1
         self.relayHatBus=1
+        self.esng = espeakng.Speaker()
+        self.ptt_out = configParams["ptt_out"]
+        self.callSign = configParams["callSign"]
     def connect(self):
         self.client = mqtt.Client("rosebud_mqtt")  
         self.client.username_pw_set(self.mqtt_username, self.mqtt_password)
@@ -232,29 +229,59 @@ class mqtt_sub:
         currentTime = int(time.time())
         secondsAgo5 = currentTime -5 
         if ("ZVEI1: 1E010ED51380E8" in payld) :
-                print("we have lights OUT gentelemen")
+                msg = "RC: Lights OFF"
+                print(msg)
                 mcp.pinMode(3, mcp.OUTPUT)            
                 mcp.output(3, mcp.HIGH)
+                logging.info(msg)
+                time.sleep(3)
+                radio.sendRadioMessage(self, "Turning off Lights")
         if ("ZVEI1: 1E0101D51380E8" in payld) :
-                print("we have lights ON gentelemen")
+                msg = "RC: Lights ON"
+                print(msg)
                 mcp.pinMode(3, mcp.OUTPUT)            
-                mcp.output(3, mcp.LOW)                
+                mcp.output(3, mcp.LOW)      
+                logging.info(msg)
+                time.sleep(3)
+                radio.sendRadioMessage(self, "Turning on Lights")                          
         if ("ZVEI1: 1E020ED51380E8" in payld) :
-                print("Generator Stop/Auto")
-                powerControl.stopGen1(self)             
+                msg = "RC: Stop Generator"
+                print(msg)
+                logging.info(msg)
+                time.sleep(3)
+                radio.sendRadioMessage(self, "Stopping Generator")                            
+                powerControl.stopGen1(self) 
         if ("ZVEI1: 1E0201D51380E8" in payld) :
                 self.numberOfTries = 0
-                print("Generator Start")
+                msg = "RC: Start Generator"
+                logging.info("RC: Start Generator")
+                time.sleep(3)
+                radio.sendRadioMessage(self, "Starting Generator")                  
+                print(msg)
                 powerControl.startGen1(self)                 
         if ("ZVEI1: 1E030ED51380E8" in payld) :
-                print("Get Temp. Need a xmitter first.")
-            
+                logging.info("RC: Get A/C SetTemp")
+                time.sleep(3)                
+                radio.sendRadioMessage(self, "Current A C set temperature is " + str(setTemp))  
         if ("ZVEI1: 1E0301D51380E8" in payld) :
-                print("Temp Down")
-                gui.acDown              
+                msg = "RC: Set A/C SetTemp Down"
+                print(msg)
+                logging.info(msg)
+                gui.acDown      
+                time.sleep(3)
+                radio.sendRadioMessage(self, "Current A C set temperature is now" + str(setTemp))        
         if ("ZVEI1: 1E0302D51380E8" in payld) :
-                print("Temp Up")
-                gui.acUp               
+                msg = "RC: Set A/C SetTemp UP"
+                logging.info(msg)
+                gui.acUp  
+                time.sleep(3)
+                radio.sendRadioMessage(self, "Current A C set temperature is now" + str(setTemp))        
+        if ("ZVEI1: 1E0303D51380E8" in payld) :
+                print("Get Current Temp")
+                logging.info("RC: Get A/C SetTemp")
+                logging.info("   Current Temp: " + temp_f)
+                time.sleep(3)
+                radio.sendRadioMessage(self, "Current ambient temperature is " + str(temp_f))                              
         if ("ZVEI1: 1E040ED51380E8" in payld) :
                 print("Step OFF")
                 mcp.pinMode(1, mcp.OUTPUT)
@@ -288,12 +315,12 @@ class mqtt_sub:
                     self.button12['text'] = self.button12Txt
                     self.button12.grid(row=4,column=0)
 
+
 window = Tk()
 #window.geometry('1280x1024')
 window.title("Glass Control Panel")
 window.attributes('-fullscreen',True)
 T = Text(window, height = 1, width = 17)
-    
 class gui:
     def __init__(self, window, hi, setTemp): 
         mqtt_thread = threading.Thread(target=mqtt_sub.connect(mqtt_))
@@ -384,24 +411,29 @@ class gui:
         self.button13=Button(window, text=button13Txt,  height = 5, width = 15, bg='#0052cc', fg='#ffffff', font=self.buttonFont)
         self.button13.grid(row=3,column=3, pady=12, padx=11)
 
-        self.button14=Button(window, text="", height = 5, width = 15, bg='#0052cc', fg='#ffffff', font=self.buttonFont)
+        self.button14=Button(window, text="", height = 5, width = 15, bg='#0052cc', fg='#ffffff', font=self.buttonFont, state="disabled")
         self.button14.grid(row=5,column=0, pady=12, padx=11)
         
         if readIO.readPin(11) == 0:
-            self.button15=Button(window, text="EXT GEN (ON)", height = 5, width = 15, bg='green', fg='#ffffff', font=self.buttonFont)
+            self.button15=Button(window, text="EXT GEN (ON)", height = 5, width = 15, bg='green', fg='#ffffff', font=self.buttonFont, state="disabled")
             self.button15.grid(row=5,column=1, pady=12, padx=11)
         else:
-            self.button15=Button(window, text="EXT GEN", height = 5, width = 15, bg='#0052cc', fg='#ffffff', font=self.buttonFont)
+            self.button15=Button(window, text="EXT GEN", height = 5, width = 15, bg='#0052cc', fg='#ffffff', font=self.buttonFont, state="disabled")
             self.button15.grid(row=5,column=1, pady=12, padx=11)
 
-        self.button16=Button(window, text="", height = 5, width = 15, bg='#0052cc', fg='#ffffff', font=self.buttonFont)
+        self.button16=Button(window, text="", height = 5, width = 15, bg='#0052cc', fg='#ffffff', font=self.buttonFont, state="disabled")
         self.button16.grid(row=5,column=2, pady=12, padx=11)        
 
-        self.button17=Button(window, text="", height = 5, width = 15, bg='#0052cc', fg='#ffffff', font=self.buttonFont)
+        self.button17=Button(window, text="", height = 5, width = 15, bg='#0052cc', fg='#ffffff', font=self.buttonFont, state="disabled")
         self.button17.grid(row=5,column=3, pady=12, padx=11)     
 
-        window.mainloop()
+        self.logBox = tkinter.Text(window, state="disabled")
+        self.logBox.place(x=330, y=420, height=175, width=620)
 
+
+
+        window.mainloop()
+    
     def rvEnable(self):
         if self.buttonDown0 == 0 :
             self.buttonDown0 = 1
@@ -613,7 +645,6 @@ if __name__ == "__main__":
                             configParams['mqtt_port'],
                             configParams['mqtt_username'],
                             buttonDown7 = 0 )            
-        
     setupPins(22, 27, 20, 21)
     inverterStatus = 0
     hi = "0"
