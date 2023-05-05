@@ -1,5 +1,5 @@
 autoPowerOn: 85
-callSign: "W R F R 8 8 6"
+callSign: "K 0 G E T"
 chargerEnable_out: 24
 ct1_in: 22
 DTMFOperStatus: true
@@ -21,7 +21,7 @@ inverterSense: 10
 inverterEnable_out: 4
 medHumidity: 35
 medTemp: 83
-mqtt_host: 10.8.0.3
+mqtt_host: 127.0.0.1
 #mqtt_user: "dale"
 mqtt_password: "paleale"
 mqtt_feed: "/feeds/stats/"
