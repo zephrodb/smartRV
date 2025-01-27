@@ -21,12 +21,12 @@ inverterSense: 10
 inverterEnable_out: 4
 medHumidity: 35
 medTemp: 83
-mqtt_host: 127.0.0.1
-#mqtt_user: "dale"
-mqtt_password: "paleale"
-mqtt_feed: "/feeds/stats/"
+mqtt_broker: 192.168.192.199
+mqtt_user: "mqtt_user"
+mqtt_password: "mqtt_user"
+mqtt_topic: "homeassistant/switch/state/"
 mqtt_port: 1883
-mqtt_username: "dale"
+mqtt_username: "mqtt_user"
 numberOfTries: 1
 ptt_out: 27
 radioCharger1_out: 20
@@ -42,4 +42,7 @@ snooze: 10
 temp1_in: 22
 temp2_in: 17
 windowsTitle: "Control Panel"
+i2cBus: 1
+mcpAddress: "0x20"
+numGPIOS: 16
 
