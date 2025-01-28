@@ -62,7 +62,7 @@ class readIO:
         if 0 <= pin <= 15:
             return mcp.currentVal(pin)
         else:
-            raise ValueError("Pin number must be between 8 and 15.")
+            raise ValueError("Pin number must be between 0 and 15.")
 
 class go:
     def __init__(self):
@@ -70,7 +70,7 @@ class go:
     def run():
         mcp = MCP23017(address=0x24, num_gpios=16)
         while True:
-            i = 0
+            i = 8
             while i <= 15 :
                 pin = i
                 rtn = readIO.readPin(mcp, pin)
@@ -119,9 +119,7 @@ if __name__ == "__main__":
                     configParams['mqtt_password'],
                     configParams['mqtt_port'],
                     configParams['mqtt_user'])
-                    #configParams['i2cBus'],
-                    #configParams['mcpAddress'],
-                    #configParams['numGPIOS'])  
+
 
         
 

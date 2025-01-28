@@ -24,7 +24,7 @@ medTemp: 83
 mqtt_broker: 192.168.192.199
 mqtt_user: "mqtt_user"
 mqtt_password: "mqtt_user"
-mqtt_topic: "homeassistant/switch/state/"
+mqtt_topic: "homeassistant/"
 mqtt_port: 1883
 mqtt_username: "mqtt_user"
 numberOfTries: 1
