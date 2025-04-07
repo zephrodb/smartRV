@@ -1,0 +1,42 @@
+binary_sensor:
+  - platform: mcp23017
+    i2c_address: 0x24
+    pins:
+      0 : Button_0
+      1 : Button_1
+      2 : Button_2
+      3 : Button_3
+      4 : Button_4
+      5 : Button_5
+      6 : Button_6
+      7 : Button_7
+      8 : Button_8
+      9 : Button_9
+      10: Button_10
+      11: Button_11
+      12: Button_12
+      13: Button_13
+      14: Button_14
+      15: Button_15
+
+switch:
+  - platform: mcp23017
+    i2c_address: 0x24
+    pins:
+      0 : Output_0
+      1 : Output_1
+      2 : Output_2
+      3 : Output_3
+      4 : Output_4
+      5 : Output_5
+      6 : Output_6
+      7 : Output_7
+      8 : Output_8
+      9 : Output_9
+      10: Output_10
+      11: Output_11
+      12: Output_12
+      13: Output_13
+      14: Output_14
+      15: Output_15
+
